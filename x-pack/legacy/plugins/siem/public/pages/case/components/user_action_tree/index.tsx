@@ -207,12 +207,7 @@ export const UserActionTree = React.memo(
           isLoading={isLoadingIds.includes(NewId)}
           fullName={currentUser != null ? currentUser.fullName : ''}
           markdown={MarkdownNewComment}
-<<<<<<< HEAD
-          onEdit={handleManageMarkdownEditId.bind(null, NewId)}
           userName={currentUser != null ? currentUser.username : ''}
-=======
-          userName="to be determined"
->>>>>>> integrate user action API with UI
         />
       </>
     );
