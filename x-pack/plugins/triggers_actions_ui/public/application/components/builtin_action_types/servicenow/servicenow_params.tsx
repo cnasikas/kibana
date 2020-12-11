@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import React, { Fragment, useCallback, useEffect, useMemo } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef } from 'react';
 import { i18n } from '@kbn/i18n';
 import {
   EuiFormRow,
@@ -46,6 +46,8 @@ const selectOptions = [
 const ServiceNowParamsFields: React.FunctionComponent<
   ActionParamsProps<ServiceNowActionParams>
 > = ({ actionConnector, actionParams, editAction, index, errors, messageVariables }) => {
+  const init = useRef(true);
+
   const { incident, comments } = useMemo(
     () =>
       actionParams.subActionParams ??
@@ -71,8 +73,23 @@ const ServiceNowParamsFields: React.FunctionComponent<
   );
 
   useEffect(() => {
-    return () => {
-      // clear subActionParams when connector is changed
+    // clear subActionParams when connector is changed
+    editAction(
+      'subActionParams',
+      {
+        incident: {},
+        comments: [],
+      },
+      index
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionConnector]);
+
+  useEffect(() => {
+    // On init set the subAction and the subActionParams
+    if (init.current) {
+      init.current = false;
+      editAction('subAction', 'pushToService', index);
       editAction(
         'subActionParams',
         {
@@ -81,15 +98,8 @@ const ServiceNowParamsFields: React.FunctionComponent<
         },
         index
       );
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionConnector]);
-  useEffect(() => {
-    if (!actionParams.subAction) {
-      editAction('subAction', 'pushToService', index);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [editAction, index]);
 
   return (
     <Fragment>

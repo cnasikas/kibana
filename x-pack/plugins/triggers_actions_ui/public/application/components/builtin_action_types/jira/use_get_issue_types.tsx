@@ -19,6 +19,7 @@ interface Props {
     'get$' | 'add' | 'remove' | 'addSuccess' | 'addWarning' | 'addDanger' | 'addError'
   >;
   actionConnector?: ActionConnector;
+  onSuccess?: (issueTypes: IssueTypes) => void;
 }
 
 export interface UseGetIssueTypes {
@@ -30,6 +31,7 @@ export const useGetIssueTypes = ({
   http,
   actionConnector,
   toastNotifications,
+  onSuccess,
 }: Props): UseGetIssueTypes => {
   const [isLoading, setIsLoading] = useState(true);
   const [issueTypes, setIssueTypes] = useState<IssueTypes>([]);
@@ -61,6 +63,10 @@ export const useGetIssueTypes = ({
               title: i18n.ISSUE_TYPES_API_ERROR,
               text: `${res.serviceMessage ?? res.message}`,
             });
+          } else {
+            if (onSuccess) {
+              onSuccess(res.data);
+            }
           }
         }
       } catch (error) {
@@ -82,6 +88,8 @@ export const useGetIssueTypes = ({
       setIsLoading(false);
       abortCtrl.current.abort();
     };
+    // onSuccess causes re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [http, actionConnector, toastNotifications]);
 
   return {

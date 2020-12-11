@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import React, { Fragment, useCallback, useEffect, useMemo } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   EuiFormRow,
   EuiComboBox,
@@ -37,6 +37,8 @@ const ResilientParamsFields: React.FunctionComponent<ActionParamsProps<Resilient
     http,
     notifications: { toasts },
   } = useKibana().services;
+  const init = useRef(true);
+
   const { incident, comments } = useMemo(
     () =>
       actionParams.subActionParams ??
@@ -124,8 +126,23 @@ const ResilientParamsFields: React.FunctionComponent<ActionParamsProps<Resilient
   }, [editSubActionProperty, incident.incidentTypes]);
 
   useEffect(() => {
-    return () => {
-      // clear subActionParams when connector is changed
+    // clear subActionParams when connector is changed
+    editAction(
+      'subActionParams',
+      {
+        incident: {},
+        comments: [],
+      },
+      index
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionConnector]);
+
+  useEffect(() => {
+    // On init set the subAction and the subActionParams
+    if (init.current) {
+      init.current = false;
+      editAction('subAction', 'pushToService', index);
       editAction(
         'subActionParams',
         {
@@ -134,15 +151,8 @@ const ResilientParamsFields: React.FunctionComponent<ActionParamsProps<Resilient
         },
         index
       );
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionConnector]);
-  useEffect(() => {
-    if (!actionParams.subAction) {
-      editAction('subAction', 'pushToService', index);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [editAction, index]);
 
   return (
     <Fragment>

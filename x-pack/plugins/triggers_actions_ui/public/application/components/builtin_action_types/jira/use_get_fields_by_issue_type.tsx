@@ -25,6 +25,7 @@ interface Props {
   >;
   issueType: string | undefined;
   actionConnector?: ActionConnector;
+  onSuccess?: (fields: Fields) => void;
 }
 
 export interface UseGetFieldsByIssueType {
@@ -37,6 +38,7 @@ export const useGetFieldsByIssueType = ({
   toastNotifications,
   actionConnector,
   issueType,
+  onSuccess,
 }: Props): UseGetFieldsByIssueType => {
   const [isLoading, setIsLoading] = useState(true);
   const [fields, setFields] = useState<Fields>({});
@@ -68,6 +70,10 @@ export const useGetFieldsByIssueType = ({
               title: i18n.FIELDS_API_ERROR,
               text: `${res.serviceMessage ?? res.message}`,
             });
+          } else {
+            if (onSuccess) {
+              onSuccess(res.data);
+            }
           }
         }
       } catch (error) {
@@ -89,6 +95,8 @@ export const useGetFieldsByIssueType = ({
       setIsLoading(false);
       abortCtrl.current.abort();
     };
+    // onSuccess causes re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [http, actionConnector, issueType, toastNotifications]);
 
   return {

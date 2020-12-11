@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import React, { Fragment, useCallback, useEffect, useMemo } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { i18n } from '@kbn/i18n';
 import {
@@ -39,6 +39,7 @@ const JiraParamsFields: React.FunctionComponent<ActionParamsProps<JiraActionPara
     http,
     notifications: { toasts },
   } = useKibana().services;
+  const init = useRef(true);
   const { incident, comments } = useMemo(
     () =>
       actionParams.subActionParams ??
@@ -49,18 +50,6 @@ const JiraParamsFields: React.FunctionComponent<ActionParamsProps<JiraActionPara
     [actionParams.subActionParams]
   );
 
-  const { isLoading: isLoadingIssueTypes, issueTypes } = useGetIssueTypes({
-    http,
-    toastNotifications: toasts,
-    actionConnector,
-  });
-
-  const { isLoading: isLoadingFields, fields } = useGetFieldsByIssueType({
-    http,
-    toastNotifications: toasts,
-    actionConnector,
-    issueType: incident.issueType ?? '',
-  });
   const editSubActionProperty = useCallback(
     (key: string, value: any) => {
       const newProps =
@@ -75,6 +64,40 @@ const JiraParamsFields: React.FunctionComponent<ActionParamsProps<JiraActionPara
     [comments, editAction, incident, index]
   );
 
+  const onIssueTypeFetch = useCallback(
+    (newIssueTypes) => {
+      if (newIssueTypes.length > 0) {
+        editSubActionProperty('issueType', newIssueTypes[0].id ?? '');
+      }
+    },
+    [editSubActionProperty]
+  );
+
+  const onFieldsFetch = useCallback(
+    (newFields) => {
+      const priorities = newFields.priority != null ? newFields.priority.allowedValues : [];
+      if (priorities.length > 0) {
+        editSubActionProperty('priority', priorities[0].name ?? '');
+      }
+    },
+    [editSubActionProperty]
+  );
+
+  const { isLoading: isLoadingIssueTypes, issueTypes } = useGetIssueTypes({
+    http,
+    toastNotifications: toasts,
+    actionConnector,
+    onSuccess: onIssueTypeFetch,
+  });
+
+  const { isLoading: isLoadingFields, fields } = useGetFieldsByIssueType({
+    http,
+    toastNotifications: toasts,
+    actionConnector,
+    issueType: incident.issueType ?? '',
+    onSuccess: onFieldsFetch,
+  });
+
   const hasLabels = useMemo(() => Object.prototype.hasOwnProperty.call(fields, 'labels'), [fields]);
   const hasDescription = useMemo(
     () => Object.prototype.hasOwnProperty.call(fields, 'description'),
@@ -84,21 +107,17 @@ const JiraParamsFields: React.FunctionComponent<ActionParamsProps<JiraActionPara
     fields,
   ]);
   const hasParent = useMemo(() => Object.prototype.hasOwnProperty.call(fields, 'parent'), [fields]);
+
   const issueTypesSelectOptions: EuiSelectOption[] = useMemo(() => {
-    if (!incident.issueType && issueTypes.length > 0) {
-      editSubActionProperty('issueType', issueTypes[0].id ?? '');
-    }
     return issueTypes.map((type) => ({
       value: type.id ?? '',
       text: type.name ?? '',
     }));
-  }, [editSubActionProperty, incident.issueType, issueTypes]);
+  }, [issueTypes]);
+
   const prioritiesSelectOptions: EuiSelectOption[] = useMemo(() => {
     if (incident.issueType != null && fields != null) {
       const priorities = fields.priority != null ? fields.priority.allowedValues : [];
-      if (!incident.priority && priorities.length > 0) {
-        editSubActionProperty('priority', priorities[0].id ?? '');
-      }
       return priorities.map((p: { id: string; name: string }) => {
         return {
           value: p.name,
@@ -107,7 +126,7 @@ const JiraParamsFields: React.FunctionComponent<ActionParamsProps<JiraActionPara
       });
     }
     return [];
-  }, [editSubActionProperty, fields, incident.issueType, incident.priority]);
+  }, [fields, incident.issueType]);
 
   const labelOptions = useMemo(
     () => (incident.labels ? incident.labels.map((label: string) => ({ label })) : []),
@@ -115,8 +134,23 @@ const JiraParamsFields: React.FunctionComponent<ActionParamsProps<JiraActionPara
   );
 
   useEffect(() => {
-    return () => {
-      // clear subActionParams when connector is changed
+    // clear subActionParams when connector is changed
+    editAction(
+      'subActionParams',
+      {
+        incident: {},
+        comments: [],
+      },
+      index
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionConnector]);
+
+  useEffect(() => {
+    // On init set the subAction and the subActionParams
+    if (init.current) {
+      init.current = false;
+      editAction('subAction', 'pushToService', index);
       editAction(
         'subActionParams',
         {
@@ -125,15 +159,9 @@ const JiraParamsFields: React.FunctionComponent<ActionParamsProps<JiraActionPara
         },
         index
       );
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionConnector]);
-  useEffect(() => {
-    if (!actionParams.subAction) {
-      editAction('subAction', 'pushToService', index);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [editAction, index]);
+
   return (
     <Fragment>
       <>
