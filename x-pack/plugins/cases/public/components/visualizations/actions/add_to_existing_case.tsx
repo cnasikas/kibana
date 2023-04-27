@@ -4,7 +4,7 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { unmountComponentAtNode } from 'react-dom';
 import { Router } from 'react-router-dom';
 import { i18n } from '@kbn/i18n';
@@ -51,7 +51,10 @@ const AddExistingCaseModalWrapper: React.FC<Props> = ({ embeddable, onClose, onS
     },
   ];
 
-  modal.open({ getAttachments: () => attachments });
+  useEffect(() => {
+    modal.open({ getAttachments: () => attachments });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return null;
 };

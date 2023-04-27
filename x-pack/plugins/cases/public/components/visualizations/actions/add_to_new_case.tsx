@@ -4,7 +4,7 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { unmountComponentAtNode } from 'react-dom';
 import { i18n } from '@kbn/i18n';
 import { Router } from 'react-router-dom';
@@ -37,7 +37,7 @@ interface Props {
 
 const AddToNewCaseFlyoutWrapper: React.FC<Props> = ({ embeddable, onClose, onSuccess }) => {
   const { attributes, timeRange } = embeddable.getInput();
-  const createNewCaseFlyout = useCasesAddToNewCaseFlyout({
+  const flyout = useCasesAddToNewCaseFlyout({
     onClose,
     onSuccess,
     toastContent: ADD_TO_CASE_SUCCESS,
@@ -53,7 +53,10 @@ const AddToNewCaseFlyoutWrapper: React.FC<Props> = ({ embeddable, onClose, onSuc
     },
   ];
 
-  createNewCaseFlyout.open({ attachments });
+  useEffect(() => {
+    flyout.open({ attachments });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return null;
 };
