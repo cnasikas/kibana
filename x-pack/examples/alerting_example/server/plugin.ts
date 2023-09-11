@@ -11,6 +11,7 @@ import { i18n } from '@kbn/i18n';
 import { DEFAULT_APP_CATEGORIES } from '@kbn/core-application-common';
 import { PluginSetupContract as AlertingSetup } from '@kbn/alerting-plugin/server';
 import { PluginSetupContract as FeaturesPluginSetup } from '@kbn/features-plugin/server';
+import { PluginSetupContract as ActionsPluginSetupContract } from '@kbn/actions-plugin/server';
 
 import { alertType as alwaysFiringAlert } from './alert_types/always_firing';
 import { alertType as peopleInSpaceAlert } from './alert_types/astros';
@@ -18,18 +19,31 @@ import { alertType as patternAlert } from './alert_types/pattern';
 // can't import static code from another plugin to support examples functional test
 const INDEX_THRESHOLD_ID = '.index-threshold';
 import { ALERTING_EXAMPLE_APP_ID } from '../common/constants';
+import { getSystemActionType } from './action_types/system_action';
+import { getSystemActionConnectorAdapter } from './connector_adapters/system_action_adapter';
 
 // this plugin's dependencies
 export interface AlertingExampleDeps {
+  actions: ActionsPluginSetupContract;
   alerting: AlertingSetup;
   features: FeaturesPluginSetup;
 }
 
 export class AlertingExamplePlugin implements Plugin<void, void, AlertingExampleDeps> {
-  public setup(core: CoreSetup, { alerting, features }: AlertingExampleDeps) {
+  public setup(core: CoreSetup, { actions, alerting, features }: AlertingExampleDeps) {
     alerting.registerType(alwaysFiringAlert);
     alerting.registerType(peopleInSpaceAlert);
     alerting.registerType(patternAlert);
+
+    /**
+     * Connectors
+     */
+    actions.registerType(getSystemActionType());
+
+    /**
+     * Connector adapters
+     */
+    alerting.registerConnectorAdapter(getSystemActionConnectorAdapter());
 
     features.registerKibanaFeature({
       id: ALERTING_EXAMPLE_APP_ID,
