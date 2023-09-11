@@ -49,5 +49,10 @@ export async function loadActionTypes({
     : await http.get<Parameters<typeof rewriteResponseRes>[0]>(
         `${BASE_ACTION_API_PATH}/connector_types`
       );
-  return rewriteResponseRes(res);
+
+  const actionTypesWithoutSystemActions = res.filter(
+    (actionType) => !actionType.is_system_action_type
+  );
+
+  return rewriteResponseRes(actionTypesWithoutSystemActions);
 }

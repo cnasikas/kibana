@@ -42,5 +42,7 @@ export async function loadAllActions({ http }: { http: HttpSetup }): Promise<Act
     `${BASE_ACTION_API_PATH}/connectors`
   );
 
-  return rewriteResponseRes(res) as ActionConnector[];
+  const connectorsWithoutSystemActions = res.filter((connector) => !connector.is_system_action);
+
+  return rewriteResponseRes(connectorsWithoutSystemActions) as ActionConnector[];
 }
