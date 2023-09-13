@@ -26,8 +26,8 @@ import { IEventLogClient } from '@kbn/event-log-plugin/server';
 import { KueryNode } from '@kbn/es-query';
 import { FindConnectorResult } from '../application/connector/types';
 import { ConnectorType } from '../application/connector/types';
-import { getAll } from '../application/connector/methods/get_all';
-import { listTypes } from '../application/connector/methods/list_types';
+import { getAll, getAllSystemActions } from '../application/connector/methods/get_all';
+import { listTypes, listSystemActionTypes } from '../application/connector/methods/list_types';
 import {
   GetGlobalExecutionKPIParams,
   GetGlobalExecutionLogParams,
@@ -475,10 +475,17 @@ export class ActionsClient {
   }
 
   /**
-   * Get all connectors with in-memory connectors
+   * Get all connectors with system connectors
    */
   public async getAll({ includeSystemActions = false } = {}): Promise<FindConnectorResult[]> {
     return getAll({ context: this.context, includeSystemActions });
+  }
+
+  /**
+   * Get all system connectors
+   */
+  public async getAllSystemActions(): Promise<FindConnectorResult[]> {
+    return getAllSystemActions({ context: this.context });
   }
 
   /**
@@ -820,6 +827,10 @@ export class ActionsClient {
     includeSystemActionTypes = false,
   }: ListTypesParams = {}): Promise<ConnectorType[]> {
     return listTypes(this.context, { featureId, includeSystemActionTypes });
+  }
+
+  public async listSystemActionTypes(): Promise<ConnectorType[]> {
+    return listSystemActionTypes(this.context);
   }
 
   public isActionTypeEnabled(

@@ -5,4 +5,4 @@
  * 2.0.
  */
 
-export { getAll, getAllSystemActions } from './get_all';
+export { transformGetSystemActionsResponse } from './v1';

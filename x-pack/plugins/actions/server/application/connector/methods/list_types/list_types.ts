@@ -31,3 +31,13 @@ export async function listTypes(
 
   return filteredConnectorTypes;
 }
+
+export async function listSystemActionTypes(
+  context: ActionsClientContext
+): Promise<ConnectorType[]> {
+  const connectorTypes = context.actionTypeRegistry.list();
+
+  const systemActionTypes = connectorTypes.filter((type) => type.isSystemActionType);
+
+  return systemActionTypes;
+}

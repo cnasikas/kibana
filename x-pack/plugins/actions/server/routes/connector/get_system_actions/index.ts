@@ -5,4 +5,4 @@
  * 2.0.
  */
 
-export { getAll, getAllSystemActions } from './get_all';
+export { getSystemActionsRoute } from './get_system_actions';

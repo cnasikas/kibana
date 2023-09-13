@@ -36,3 +36,8 @@ export const connectorTypesResponseSchema = schema.object({
   supported_feature_ids: schema.arrayOf(schema.string()),
   is_system_action_type: schema.boolean(),
 });
+
+export const getSystemActionsResponseSchema = schema.object({
+  connectors: schema.arrayOf(connectorResponseSchema),
+  types: schema.arrayOf(connectorTypesResponseSchema),
+});

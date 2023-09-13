@@ -6,7 +6,11 @@
  */
 
 import { TypeOf } from '@kbn/config-schema';
-import { connectorResponseSchemaV1, connectorTypesResponseSchemaV1 } from '..';
+import {
+  connectorResponseSchemaV1,
+  connectorTypesResponseSchemaV1,
+  getSystemActionsResponseSchemaV1,
+} from '..';
 
 export type ActionTypeConfig = Record<string, unknown>;
 type ConnectorResponseSchemaType = TypeOf<typeof connectorResponseSchemaV1>;
@@ -33,4 +37,11 @@ export interface ConnectorTypesResponse {
   minimum_license_required: ConnectorTypesResponseSchemaType['minimum_license_required'];
   supported_feature_ids: ConnectorTypesResponseSchemaType['supported_feature_ids'];
   is_system_action_type: ConnectorTypesResponseSchemaType['is_system_action_type'];
+}
+
+type GetSystemActionsResponseSchemaType = TypeOf<typeof getSystemActionsResponseSchemaV1>;
+
+export interface GetSystemActionsResponse {
+  connectors: GetSystemActionsResponseSchemaType['connectors'];
+  types: GetSystemActionsResponseSchemaType['types'];
 }
