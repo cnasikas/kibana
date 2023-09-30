@@ -1845,22 +1845,40 @@ describe('CaseUserActionService', () => {
           });
         });
 
-        describe('getMostRecentUserAction', () => {
+        describe('getMostRecentUserActions', () => {
+          const getAggregations = (userAction: SavedObject<CaseUserActionWithoutReferenceIds>) => {
+            const userActions = set({}, 'latestUserAction.hits.hits', [userAction]);
+            const aggregations = set({}, 'userActionsPerType.buckets', [
+              { ...userActions, key: userAction.attributes.type },
+            ]);
+
+            return aggregations;
+          };
+
           it('decodes correctly', async () => {
             const userAction = createUserActionSO();
-            const soFindRes = createSOFindResponse([createUserActionFindSO(userAction)]);
-            unsecuredSavedObjectsClient.find.mockResolvedValue(soFindRes);
+            const aggregations = getAggregations(userAction);
 
-            await expect(service.getMostRecentUserAction('123', [])).resolves.not.toThrow();
+            const soFindRes = createSOFindResponse([createUserActionFindSO(userAction)]);
+            unsecuredSavedObjectsClient.find.mockResolvedValue({ ...soFindRes, aggregations });
+            soSerializerMock.rawToSavedObject.mockReturnValue(userAction);
+
+            await expect(service.getMostRecentUserActions('123')).resolves.not.toThrow();
           });
 
           it.each(attributesToValidateIfMissing)('throws if %s is omitted', async (key) => {
             const userAction = createUserActionSO();
             const attributes = omit({ ...userAction.attributes }, key);
-            const soFindRes = createSOFindResponse([{ ...userAction, attributes, score: 0 }]);
-            unsecuredSavedObjectsClient.find.mockResolvedValue(soFindRes);
+            const userActionWithOmittedAttribute = { ...userAction, attributes, score: 0 };
+            // @ts-expect-error: an attribute is missing
+            const aggregations = getAggregations(userActionWithOmittedAttribute);
 
-            await expect(service.getMostRecentUserAction('123', [])).rejects.toThrow(
+            const soFindRes = createSOFindResponse([userActionWithOmittedAttribute]);
+
+            unsecuredSavedObjectsClient.find.mockResolvedValue({ ...soFindRes, aggregations });
+            soSerializerMock.rawToSavedObject.mockReturnValue(userActionWithOmittedAttribute);
+
+            await expect(service.getMostRecentUserActions('123')).rejects.toThrow(
               `Invalid value "undefined" supplied to "${key}"`
             );
           });
@@ -1868,10 +1886,16 @@ describe('CaseUserActionService', () => {
           it('throws if missing attributes from the payload', async () => {
             const userAction = createUserActionSO();
             const attributes = omit({ ...userAction.attributes }, 'payload.title');
-            const soFindRes = createSOFindResponse([{ ...userAction, attributes, score: 0 }]);
-            unsecuredSavedObjectsClient.find.mockResolvedValue(soFindRes);
+            const userActionWithOmittedAttribute = { ...userAction, attributes, score: 0 };
 
-            await expect(service.getMostRecentUserAction('123', [])).rejects.toThrow(
+            // @ts-expect-error: an attribute is missing
+            const aggregations = getAggregations(userActionWithOmittedAttribute);
+            const soFindRes = createSOFindResponse([userActionWithOmittedAttribute]);
+
+            unsecuredSavedObjectsClient.find.mockResolvedValue({ ...soFindRes, aggregations });
+            soSerializerMock.rawToSavedObject.mockReturnValue(userActionWithOmittedAttribute);
+
+            await expect(service.getMostRecentUserActions('123')).rejects.toThrow(
               'Invalid value "undefined" supplied to "payload,title"'
             );
           });
@@ -1882,10 +1906,16 @@ describe('CaseUserActionService', () => {
               { ...userAction.attributes },
               'payload.connector.fields.issueType'
             );
-            const soFindRes = createSOFindResponse([{ ...userAction, attributes, score: 0 }]);
-            unsecuredSavedObjectsClient.find.mockResolvedValue(soFindRes);
+            const userActionWithOmittedAttribute = { ...userAction, attributes, score: 0 };
 
-            await expect(service.getMostRecentUserAction('123', [])).rejects.toThrow(
+            // @ts-expect-error: an attribute is missing
+            const aggregations = getAggregations(userActionWithOmittedAttribute);
+            const soFindRes = createSOFindResponse([userActionWithOmittedAttribute]);
+
+            unsecuredSavedObjectsClient.find.mockResolvedValue({ ...soFindRes, aggregations });
+            soSerializerMock.rawToSavedObject.mockReturnValue(userActionWithOmittedAttribute);
+
+            await expect(service.getMostRecentUserActions('123')).rejects.toThrow(
               'Invalid value "undefined" supplied to "payload,connector,fields,issueType",Invalid value "{"priority":"high","parent":"2"}" supplied to "payload,connector,fields"'
             );
           });
@@ -1893,37 +1923,42 @@ describe('CaseUserActionService', () => {
           it('strips out excess attributes', async () => {
             const userAction = createUserActionSO();
             const attributes = { ...userAction.attributes, 'not-exists': 'not-exists' };
-            const soFindRes = createSOFindResponse([{ ...userAction, attributes, score: 0 }]);
-            unsecuredSavedObjectsClient.find.mockResolvedValue(soFindRes);
+            const userActionWithExtraAttributes = { ...userAction, attributes, score: 0 };
+            const aggregations = getAggregations(userActionWithExtraAttributes);
+            const soFindRes = createSOFindResponse([userActionWithExtraAttributes]);
 
-            await expect(service.getMostRecentUserAction('123', [])).resolves
-              .toMatchInlineSnapshot(`
-              Object {
-                "attributes": Object {
-                  "action": "create",
-                  "comment_id": null,
-                  "created_at": "abc",
-                  "created_by": Object {
-                    "email": "a",
-                    "full_name": "abc",
-                    "username": "b",
+            unsecuredSavedObjectsClient.find.mockResolvedValue({ ...soFindRes, aggregations });
+            soSerializerMock.rawToSavedObject.mockReturnValue(userActionWithExtraAttributes);
+
+            await expect(service.getMostRecentUserActions('123')).resolves.toMatchInlineSnapshot(`
+              Map {
+                "title" => Object {
+                  "attributes": Object {
+                    "action": "create",
+                    "comment_id": null,
+                    "created_at": "abc",
+                    "created_by": Object {
+                      "email": "a",
+                      "full_name": "abc",
+                      "username": "b",
+                    },
+                    "owner": "securitySolution",
+                    "payload": Object {
+                      "title": "a new title",
+                    },
+                    "type": "title",
                   },
-                  "owner": "securitySolution",
-                  "payload": Object {
-                    "title": "a new title",
-                  },
-                  "type": "title",
+                  "id": "100",
+                  "references": Array [
+                    Object {
+                      "id": "1",
+                      "name": "associated-cases",
+                      "type": "cases",
+                    },
+                  ],
+                  "score": 0,
+                  "type": "cases-user-actions",
                 },
-                "id": "100",
-                "references": Array [
-                  Object {
-                    "id": "1",
-                    "name": "associated-cases",
-                    "type": "cases",
-                  },
-                ],
-                "score": 0,
-                "type": "cases-user-actions",
               }
             `);
           });

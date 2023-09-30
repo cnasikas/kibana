@@ -164,7 +164,6 @@ export interface PushTimeFrameInfo {
 
 export interface CaseConnectorActivity {
   connectorId: string;
-  // actionTypeId: string;
   fields: UserActionSavedObjectTransformed;
   push?: PushTimeFrameInfo;
 }
@@ -320,4 +319,18 @@ export interface CreateUserActionES<T> extends IndexRefresh {
 
 export interface PostCaseUserActionArgs extends IndexRefresh {
   actions: UserActionEvent[];
+}
+
+export interface LatestUserActionsAggsResult {
+  userActionsPerType: {
+    buckets: Array<{
+      key: string;
+      latestUserAction: {
+        key: string;
+        hits: {
+          hits: SavedObjectsRawDoc[];
+        };
+      };
+    }>;
+  };
 }

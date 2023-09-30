@@ -122,7 +122,7 @@ export const createUserActionServiceMock = (): CaseUserActionServiceMock => {
     creator: createUserActionPersisterServiceMock(),
     finder: createUserActionFinderServiceMock(),
     getConnectorFieldsBeforeLatestPush: jest.fn(),
-    getMostRecentUserAction: jest.fn(),
+    getMostRecentUserActions: jest.fn(),
     getCaseConnectorInformation: jest.fn(),
     getAll: jest.fn(),
     getUniqueConnectors: jest.fn(),

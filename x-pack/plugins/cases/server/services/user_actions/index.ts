@@ -14,7 +14,6 @@ import type {
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import type { KueryNode } from '@kbn/es-query';
 import type { CaseUserActionDeprecatedResponse } from '../../../common/types/api';
-import type { UserActionType } from '../../../common/types/domain';
 import { UserActionTypes } from '../../../common/types/domain';
 import { decodeOrThrow } from '../../../common/api';
 import {
@@ -29,6 +28,7 @@ import type {
   ConnectorActivityAggsResult,
   ConnectorFieldsBeforePushAggsResult,
   GetUsersResponse,
+  LatestUserActionsAggsResult,
   MultipleCasesUserActionsTotalAggsResult,
   ParticipantsAggsResult,
   PushInfo,
@@ -235,10 +235,9 @@ export class CaseUserActionService {
     return connectorFields;
   }
 
-  public async getMostRecentUserAction(
-    caseId: string,
-    supportedUserActions: UserActionType[]
-  ): Promise<UserActionSavedObjectTransformed | undefined> {
+  public async getMostRecentUserActions(
+    caseId: string
+  ): Promise<Map<string, UserActionSavedObjectTransformed>> {
     try {
       this.context.log.debug(
         `Attempting to retrieve the most recent user action for case id: ${caseId}`
@@ -247,45 +246,78 @@ export class CaseUserActionService {
       const id = caseId;
       const type = CASE_SAVED_OBJECT;
 
-      const connectorsFilter = buildFilter({
-        filters: supportedUserActions,
-        field: 'type',
-        operator: 'or',
+      const res = await this.context.unsecuredSavedObjectsClient.find<
+        UserActionPersistedAttributes,
+        LatestUserActionsAggsResult
+      >({
         type: CASE_USER_ACTION_SAVED_OBJECT,
+        hasReference: { type, id },
+        page: 1,
+        perPage: 1,
+        sortField: 'created_at',
+        sortOrder: 'desc',
+        aggs: CaseUserActionService.buildLatestUserActionsAggs(),
       });
 
-      const userActions =
-        await this.context.unsecuredSavedObjectsClient.find<UserActionPersistedAttributes>({
-          type: CASE_USER_ACTION_SAVED_OBJECT,
-          hasReference: { type, id },
-          page: 1,
-          perPage: 1,
-          sortField: 'created_at',
-          sortOrder: 'desc',
-          filter: connectorsFilter,
-        });
+      const latestUserActionsBuckets = res.aggregations?.userActionsPerType.buckets ?? [];
+      const latestUserActions = new Map<string, UserActionSavedObjectTransformed>();
 
-      if (userActions.saved_objects.length <= 0) {
-        return;
+      for (const userAction of latestUserActionsBuckets) {
+        const rawFieldsDoc = userAction.latestUserAction.hits.hits[0];
+
+        const doc =
+          this.context.savedObjectsSerializer.rawToSavedObject<UserActionPersistedAttributes>(
+            rawFieldsDoc
+          );
+
+        const transformedDoc = transformToExternalModel(
+          doc,
+          this.context.persistableStateAttachmentTypeRegistry
+        );
+
+        const decodeRes = decodeOrThrow(UserActionTransformedAttributesRt)(
+          transformedDoc.attributes
+        );
+
+        latestUserActions.set(userAction.key, { ...transformedDoc, attributes: decodeRes });
       }
 
-      const res = transformToExternalModel(
-        userActions.saved_objects[0],
-        this.context.persistableStateAttachmentTypeRegistry
-      );
-
-      const decodeRes = decodeOrThrow(UserActionTransformedAttributesRt)(res.attributes);
-
-      return {
-        ...res,
-        attributes: decodeRes,
-      };
+      return latestUserActions;
     } catch (error) {
       this.context.log.error(
-        `Error while retrieving the most recent user action for case id: ${caseId}: ${error}`
+        `Error while retrieving the most recent user actions per type for case id: ${caseId}: ${error}`
       );
+
       throw error;
     }
+  }
+
+  private static buildLatestUserActionsAggs(): Record<
+    string,
+    estypes.AggregationsAggregationContainer
+  > {
+    return {
+      userActionsPerType: {
+        terms: {
+          field: `${CASE_USER_ACTION_SAVED_OBJECT}.attributes.type`,
+          size: 100,
+        },
+        aggs: {
+          latestUserAction: {
+            top_hits: {
+              sort: [
+                {
+                  [`${CASE_USER_ACTION_SAVED_OBJECT}.created_at`]: {
+                    order: 'desc',
+                  },
+                },
+              ],
+              size: 1,
+            },
+          },
+        },
+      },
+    };
   }
 
   public async getCaseConnectorInformation(caseId: string): Promise<CaseConnectorActivity[]> {

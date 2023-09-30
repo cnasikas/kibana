@@ -28,6 +28,7 @@ import {
   AttachmentType,
 } from '../common/types/domain';
 import type { CasePostRequest } from '../common/types/api';
+import type { CaseConnectorActivity } from './services/user_actions/types';
 
 const lensPersistableState = {
   attributes: {
@@ -727,3 +728,143 @@ export const mockCasesContract = (): CasesStart => ({
 export const casesPluginMock = {
   createStartContract: mockCasesContract,
 };
+
+export const connectorsInformationMockResponse: CaseConnectorActivity[] = [
+  {
+    connectorId: 'mock-connector-1',
+    fields: {
+      type: 'cases-user-actions',
+      id: 'mock-user-action-4',
+      attributes: {
+        payload: {
+          connector: {
+            id: 'mock-connector-1',
+            type: ConnectorTypes.jira,
+            fields: {
+              issueType: '10006',
+              parent: null,
+              priority: 'High',
+            },
+            name: 'Jira',
+          },
+        },
+        type: UserActionTypes.connector,
+        created_at: '2023-09-30T07:40:16.039Z',
+        created_by: {
+          username: 'elastic',
+          full_name: null,
+          email: null,
+        },
+        owner: 'cases',
+        action: UserActionActions.update,
+        comment_id: null,
+      },
+      references: [
+        {
+          type: 'cases',
+          name: 'associated-cases',
+          id: 'mock-id-1',
+        },
+        {
+          id: 'mock-connector-1',
+          type: 'action',
+          name: 'connectorId',
+        },
+      ],
+      updated_at: '2023-09-30T07:40:16.059Z',
+      created_at: '2023-09-30T07:40:16.059Z',
+    },
+    push: {
+      mostRecent: {
+        type: 'cases-user-actions',
+        id: 'mock-user-action-5',
+        attributes: {
+          payload: {
+            externalService: {
+              connector_id: 'mock-connector-1',
+              pushed_at: '2023-09-30T07:40:19.787Z',
+              pushed_by: {
+                username: 'elastic',
+                full_name: null,
+                email: null,
+              },
+              connector_name: 'Jira',
+              external_id: '12345',
+              external_title: 'ROC-12345',
+              external_url: 'https://example.com',
+            },
+          },
+          type: UserActionTypes.pushed,
+          created_at: '2023-09-30T07:40:19.839Z',
+          created_by: {
+            username: 'elastic',
+            full_name: null,
+            email: null,
+          },
+          owner: 'cases',
+          action: UserActionActions.push_to_service,
+          comment_id: null,
+        },
+        references: [
+          {
+            type: 'cases',
+            name: 'associated-cases',
+            id: 'mock-id-1',
+          },
+          {
+            id: 'mock-connector-1',
+            type: 'action',
+            name: 'pushConnectorId',
+          },
+        ],
+        updated_at: '2023-09-30T07:40:19.839Z',
+        created_at: '2023-09-30T07:40:19.839Z',
+      },
+      oldest: {
+        type: 'cases-user-actions',
+        id: 'mock-user-action-6',
+        attributes: {
+          payload: {
+            externalService: {
+              connector_id: 'mock-connector-1',
+              pushed_at: '2023-09-30T07:40:19.787Z',
+              pushed_by: {
+                username: 'elastic',
+                full_name: null,
+                email: null,
+              },
+              connector_name: 'Jira',
+              external_id: '12345',
+              external_title: 'ROC-12345',
+              external_url: 'https://example.com',
+            },
+          },
+          type: UserActionTypes.pushed,
+          created_at: '2023-09-30T07:40:19.839Z',
+          created_by: {
+            username: 'elastic',
+            full_name: null,
+            email: null,
+          },
+          owner: 'cases',
+          action: UserActionActions.push_to_service,
+          comment_id: null,
+        },
+        references: [
+          {
+            type: 'cases',
+            name: 'associated-cases',
+            id: 'mock-id-1',
+          },
+          {
+            id: 'mock-connector-1',
+            type: 'action',
+            name: 'pushConnectorId',
+          },
+        ],
+        updated_at: '2023-09-30T07:40:19.839Z',
+        created_at: '2023-09-30T07:40:19.839Z',
+      },
+    },
+  },
+];
