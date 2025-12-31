@@ -10,30 +10,17 @@ import { StorageService } from './services/storage_service';
 import { DirectorService } from './director/service';
 import { EsqlService } from './services/esql_service';
 
-/**
- * Dependencies required to initialize services
- */
 export interface ServiceDependencies {
   logger: Logger;
   elasticsearch: ElasticsearchServiceStart;
 }
 
-/**
- * Service manager that initializes and manages all alerting_v2 services.
- * This follows a factory pattern to allow for extensible service initialization.
- */
 export class ServiceManager {
   private directorService?: DirectorService;
   private storageService?: StorageService;
   private esqlService?: EsqlService;
   private isInitialized = false;
 
-  /**
-   * Initializes all services with their required dependencies.
-   * This should be called during the plugin start phase when all dependencies are available.
-   *
-   * @param dependencies - The dependencies required to initialize services
-   */
   public initialize(dependencies: ServiceDependencies): void {
     if (this.isInitialized) {
       throw new Error('ServiceManager has already been initialized');
@@ -54,28 +41,28 @@ export class ServiceManager {
   public getStorageService(): StorageService {
     this.throwErrorIfNotInitialized('storageService');
 
-    return this.storageService;
+    return this.storageService!;
   }
 
   public getEsqlService(): EsqlService {
     this.throwErrorIfNotInitialized('esqlService');
 
-    return this.esqlService;
+    return this.esqlService!;
   }
 
   public getDirectorService(): DirectorService {
     this.throwErrorIfNotInitialized('directorService');
 
-    return this.directorService;
+    return this.directorService!;
   }
 
-  public isServiceInitialized(): boolean {
+  public areServicesInitialized(): boolean {
     return this.isInitialized;
   }
 
   private throwErrorIfNotInitialized(
     serviceName: 'storageService' | 'esqlService' | 'directorService'
-  ): asserts this is this & { [K in typeof serviceName]: NonNullable<this[K]> } {
+  ): void {
     if (!this.isInitialized || !this[serviceName]) {
       throw new Error(
         'ServiceManager not initialized. Call initialize() before accessing services.'

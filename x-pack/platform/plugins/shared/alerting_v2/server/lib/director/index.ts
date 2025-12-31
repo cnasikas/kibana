@@ -6,4 +6,4 @@
  */
 
 export { DirectorService } from './service';
-export { registerDirectorTask, DIRECTOR_TASK_TYPE } from './register_task';
+export { registerDirectorTask } from './register_task';

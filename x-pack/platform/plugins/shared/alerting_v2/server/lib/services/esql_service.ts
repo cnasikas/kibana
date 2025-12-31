@@ -41,15 +41,25 @@ export class EsqlService {
     }
   }
 
-  public queryResponseToObject<T>(response: EsqlEsqlResult): T[] {
+  public queryResponseToObject<T extends Record<string, any>>(response: EsqlEsqlResult): T[] {
     const objects: T[] = [];
 
-    for (const [columnIndex, column] of response.columns.entries()) {
-      for (const row of response.values) {
-        const object: Record<string, any> = {};
-        object[column.name] = row[columnIndex];
-        objects.push(object as T);
+    if (response.columns.length === 0 || response.values.length === 0) {
+      return [];
+    }
+
+    for (const row of response.values) {
+      const object: T = {} as T;
+
+      for (const [columnIndex, value] of row.entries()) {
+        const columnName = response.columns[columnIndex]?.name as keyof T;
+
+        if (columnName) {
+          object[columnName] = value as T[keyof T];
+        }
       }
+
+      objects.push(object);
     }
 
     return objects;

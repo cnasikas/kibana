@@ -8,7 +8,7 @@
 import { ALERT_EVENTS_INDEX, ALERT_TRANSITIONS_INDEX } from './constants';
 
 /**
- * ES|QL query to detect signal changes (raw signal flips).
+ * ES|QL query to detect event status changes.
  * Detects transitions like: Inactive -> Breach, Active -> Recover, etc.
  */
 export const DETECT_SIGNAL_CHANGE_QUERY = `
@@ -18,7 +18,7 @@ FROM ${ALERT_EVENTS_INDEX}
     last_event_timestamp = MAX(@timestamp)
     BY rule_id, alert_series_id
 | RENAME alert_series_id AS event_alert_series_id
-| LOOKUP JOIN .kibana_alert_transitions
+| LOOKUP JOIN ${ALERT_TRANSITIONS_INDEX}
     ON rule_id == rule_id AND event_alert_series_id == alert_series_id
 | STATS
     last_tracked_state = COALESCE(LAST(end_state, @timestamp), "inactive"),
@@ -51,7 +51,7 @@ FROM ${ALERT_TRANSITIONS_INDEX}
     BY rule_id, alert_series_id, episode_id
 | WHERE last_tracked_state == "pending" OR last_tracked_state == "recovering"
 | RENAME alert_series_id AS transition_alert_series_id
-| LOOKUP JOIN .kibana_alert_events
+| LOOKUP JOIN ${ALERT_EVENTS_INDEX}
     ON rule_id == rule_id AND alert_series_id == transition_alert_series_id
 | WHERE @timestamp >= last_transition
 | STATS 
