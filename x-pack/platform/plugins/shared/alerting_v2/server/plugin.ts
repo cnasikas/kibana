@@ -20,6 +20,8 @@ import type {
   AlertingServerStartDependencies,
 } from './types';
 import { registerFeaturePrivileges } from './lib/security/privileges';
+import { ServiceManager } from './lib/service_manager';
+import { registerDirectorTask } from './lib/director/register_task';
 
 export class AlertingPlugin
   implements
@@ -31,21 +33,38 @@ export class AlertingPlugin
     >
 {
   private readonly logger: Logger;
+  private readonly serviceManager: ServiceManager;
 
   constructor(initializerContext: PluginInitializerContext) {
-    this.logger = initializerContext.logger.get();
-    void this.logger;
+    this.logger = initializerContext.logger.get('alerting_v2');
+    this.serviceManager = new ServiceManager();
   }
 
   public setup(core: CoreSetup, plugins: AlertingServerSetupDependencies) {
     registerFeaturePrivileges(plugins.features);
+
+    registerDirectorTask(
+      plugins.taskManager,
+      () => this.serviceManager.getDirectorService(),
+      this.logger
+    );
+
+    this.logger.info('Alerting V2 plugin setup completed');
   }
 
   public start(core: CoreStart, plugins: AlertingServerStartDependencies) {
+    // Initialize all services with their dependencies
+    this.serviceManager.initialize({
+      logger: this.logger,
+      elasticsearch: core.elasticsearch,
+    });
+
+    this.logger.info('Alerting V2 plugin started successfully');
+
     return;
   }
 
   public stop() {
-    return;
+    this.logger.info('Alerting V2 plugin stopped');
   }
 }
