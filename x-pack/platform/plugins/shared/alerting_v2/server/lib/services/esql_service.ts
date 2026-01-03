@@ -5,20 +5,23 @@
  * 2.0.
  */
 
-import type { Logger, ElasticsearchClient } from '@kbn/core/server';
+import type { ElasticsearchClient } from '@kbn/core/server';
 import type { EsqlEsqlResult } from '@elastic/elasticsearch/lib/api/types';
-import type { EcsError } from '@elastic/ecs';
+import type { LoggerService } from './logger_service';
 
 interface ExecuteEsqlQueryParams {
   query: string;
 }
 
 export class EsqlService {
-  constructor(private readonly esClient: ElasticsearchClient, private readonly logger: Logger) {}
+  constructor(
+    private readonly esClient: ElasticsearchClient,
+    private readonly logger: LoggerService
+  ) {}
 
   async executeQuery({ query }: ExecuteEsqlQueryParams): Promise<EsqlEsqlResult> {
     try {
-      this.logger.debug(`EsqlService: Executing ES|QL query`);
+      this.logger.debug({ message: 'EsqlService: Executing ES|QL query' });
 
       const queryRequest = {
         query,
@@ -27,14 +30,16 @@ export class EsqlService {
 
       const response = await this.esClient.esql.query(queryRequest);
 
-      this.logger.debug(
-        `EsqlService: Query executed successfully, returned ${response.values.length} rows`
-      );
+      this.logger.debug({
+        message: `EsqlService: Query executed successfully, returned ${response.values.length} rows`,
+      });
 
       return response;
     } catch (error) {
-      this.logger.error(`EsqlService: Error executing ES|QL query`, {
-        error: this.buildError(error),
+      this.logger.error({
+        error,
+        code: 'ESQL_QUERY_ERROR',
+        type: 'EsqlServiceError',
       });
 
       throw error;
@@ -63,14 +68,5 @@ export class EsqlService {
     }
 
     return objects;
-  }
-
-  private buildError(error: Error): EcsError {
-    return {
-      code: 'ESQL_QUERY_ERROR',
-      message: error.message,
-      stack_trace: error.stack,
-      type: 'EsqlServiceError',
-    };
   }
 }

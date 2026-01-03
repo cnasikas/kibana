@@ -12,6 +12,7 @@ import { ServiceManager } from './service_manager';
 import { StorageService } from './services/storage_service';
 import { EsqlService } from './services/esql_service';
 import { DirectorService } from './director/service';
+import { LoggerService } from './services/logger_service';
 
 describe('ServiceManager', () => {
   let mockLogger: jest.Mocked<Logger>;
@@ -151,6 +152,36 @@ describe('ServiceManager', () => {
 
       const service1 = serviceManager.getDirectorService();
       const service2 = serviceManager.getDirectorService();
+
+      expect(service1).toBe(service2);
+    });
+  });
+
+  describe('LoggerService', () => {
+    it('should return LoggerService instance after initialization', () => {
+      serviceManager.initialize({
+        logger: mockLogger,
+        elasticsearch: mockElasticsearch,
+      });
+
+      const loggerService = serviceManager.getLoggerService();
+      expect(loggerService).toBeInstanceOf(LoggerService);
+    });
+
+    it('should throw error when accessed before initialization', () => {
+      expect(() => {
+        serviceManager.getLoggerService();
+      }).toThrow('ServiceManager not initialized. Call initialize() before accessing services.');
+    });
+
+    it('should return the same instance on multiple calls', () => {
+      serviceManager.initialize({
+        logger: mockLogger,
+        elasticsearch: mockElasticsearch,
+      });
+
+      const service1 = serviceManager.getLoggerService();
+      const service2 = serviceManager.getLoggerService();
 
       expect(service1).toBe(service2);
     });

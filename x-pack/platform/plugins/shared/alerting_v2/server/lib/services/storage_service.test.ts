@@ -9,16 +9,19 @@ import type { ElasticsearchClient, Logger } from '@kbn/core/server';
 import { elasticsearchServiceMock } from '@kbn/core-elasticsearch-server-mocks';
 import { loggerMock } from '@kbn/logging-mocks';
 import { StorageService } from './storage_service';
+import { LoggerService } from './logger_service';
 
 describe('StorageService', () => {
   let mockEsClient: jest.Mocked<ElasticsearchClient>;
   let mockLogger: jest.Mocked<Logger>;
+  let mockLoggerService: LoggerService;
   let storageService: StorageService;
 
   beforeEach(() => {
     mockEsClient = elasticsearchServiceMock.createElasticsearchClient();
     mockLogger = loggerMock.create();
-    storageService = new StorageService(mockEsClient, mockLogger);
+    mockLoggerService = new LoggerService(mockLogger);
+    storageService = new StorageService(mockEsClient, mockLoggerService);
   });
 
   afterEach(() => {

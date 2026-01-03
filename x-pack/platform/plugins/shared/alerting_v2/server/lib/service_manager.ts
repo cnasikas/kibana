@@ -9,16 +9,20 @@ import type { ElasticsearchServiceStart, Logger } from '@kbn/core/server';
 import { StorageService } from './services/storage_service';
 import { DirectorService } from './director/service';
 import { EsqlService } from './services/esql_service';
+import { LoggerService } from './services/logger_service';
 
 export interface ServiceDependencies {
   logger: Logger;
   elasticsearch: ElasticsearchServiceStart;
 }
 
+type ServiceName = 'storageService' | 'esqlService' | 'directorService' | 'loggerService';
+
 export class ServiceManager {
   private directorService?: DirectorService;
   private storageService?: StorageService;
   private esqlService?: EsqlService;
+  private loggerService?: LoggerService;
   private isInitialized = false;
 
   public initialize(dependencies: ServiceDependencies): void {
@@ -29,13 +33,18 @@ export class ServiceManager {
     const { logger, elasticsearch } = dependencies;
     const esClient = elasticsearch.client.asInternalUser;
 
-    this.storageService = new StorageService(esClient, logger);
-    this.esqlService = new EsqlService(esClient, logger);
-    this.directorService = new DirectorService(this.storageService, this.esqlService, logger);
+    this.loggerService = new LoggerService(logger);
+    this.storageService = new StorageService(esClient, this.loggerService);
+    this.esqlService = new EsqlService(esClient, this.loggerService);
+    this.directorService = new DirectorService(
+      this.storageService,
+      this.esqlService,
+      this.loggerService
+    );
 
     this.isInitialized = true;
 
-    logger.debug('ServiceManager: All services initialized successfully');
+    this.loggerService.debug({ message: 'ServiceManager: All services initialized successfully' });
   }
 
   public getStorageService(): StorageService {
@@ -56,13 +65,17 @@ export class ServiceManager {
     return this.directorService!;
   }
 
+  public getLoggerService(): LoggerService {
+    this.throwErrorIfNotInitialized('loggerService');
+
+    return this.loggerService!;
+  }
+
   public areServicesInitialized(): boolean {
     return this.isInitialized;
   }
 
-  private throwErrorIfNotInitialized(
-    serviceName: 'storageService' | 'esqlService' | 'directorService'
-  ): void {
+  private throwErrorIfNotInitialized(serviceName: ServiceName): void {
     if (!this.isInitialized || !this[serviceName]) {
       throw new Error(
         'ServiceManager not initialized. Call initialize() before accessing services.'

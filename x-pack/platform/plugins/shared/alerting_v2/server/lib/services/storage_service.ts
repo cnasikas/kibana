@@ -5,9 +5,9 @@
  * 2.0.
  */
 
-import type { Logger, ElasticsearchClient } from '@kbn/core/server';
-import type { EcsError } from '@elastic/ecs';
+import type { ElasticsearchClient } from '@kbn/core/server';
 import type { BulkResponse } from '@elastic/elasticsearch/lib/api/types';
+import type { LoggerService } from './logger_service';
 
 interface BulkIndexDocsParams {
   index: string;
@@ -15,7 +15,10 @@ interface BulkIndexDocsParams {
 }
 
 export class StorageService {
-  constructor(private readonly esClient: ElasticsearchClient, private readonly logger: Logger) {}
+  constructor(
+    private readonly esClient: ElasticsearchClient,
+    private readonly logger: LoggerService
+  ) {}
 
   public async bulkIndexDocs({ index, docs }: BulkIndexDocsParams): Promise<void> {
     if (docs.length === 0) {
@@ -32,16 +35,15 @@ export class StorageService {
 
       this.logFirstError(response);
 
-      this.logger.debug(
-        `StorageService: Successfully bulk indexed ${docs.length} documents to index: ${index}`
-      );
+      this.logger.debug({
+        message: `StorageService: Successfully bulk indexed ${docs.length} documents to index: ${index}`,
+      });
     } catch (error) {
-      this.logger.error(
-        `StorageService: Error bulk indexing documents to index: ${index} - ${error.message}`,
-        {
-          error: this.buildError(error),
-        }
-      );
+      this.logger.error({
+        error: error instanceof Error ? error : new Error(String(error)),
+        code: 'BULK_INDEX_ERROR',
+        type: 'StorageServiceError',
+      });
 
       throw error;
     }
@@ -53,22 +55,15 @@ export class StorageService {
 
       if (firstErrorItem) {
         const error = firstErrorItem.index?.error;
-        this.logger.error(
-          `StorageService: Bulk indexing encountered error at item ${error?.status}: [${error?.type}] ${error?.reason}`,
-          {
-            error,
-          }
-        );
+
+        this.logger.error({
+          error: new Error(
+            `[${error?.type ?? 'UNKNOWN_ERROR'}] ${error?.reason ?? 'UNKNOWN_REASON'}`
+          ),
+          code: 'BULK_INDEX_ERROR',
+          type: 'StorageServiceError',
+        });
       }
     }
-  }
-
-  private buildError(error: Error): EcsError {
-    return {
-      code: 'BULK_INDEX_ERROR',
-      message: error.message,
-      stack_trace: error.stack,
-      type: 'StorageServiceError',
-    };
   }
 }

@@ -46,7 +46,7 @@ export class AlertingPlugin
     registerDirectorTask(
       plugins.taskManager,
       () => this.serviceManager.getDirectorService(),
-      this.logger
+      () => this.serviceManager.getLoggerService()
     );
 
     this.logger.info('Alerting V2 plugin setup completed');

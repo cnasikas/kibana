@@ -10,16 +10,19 @@ import type { EsqlEsqlResult } from '@elastic/elasticsearch/lib/api/types';
 import { elasticsearchServiceMock } from '@kbn/core-elasticsearch-server-mocks';
 import { loggerMock } from '@kbn/logging-mocks';
 import { EsqlService } from './esql_service';
+import { LoggerService } from './logger_service';
 
 describe('EsqlService', () => {
   let mockEsClient: jest.Mocked<ElasticsearchClient>;
   let mockLogger: jest.Mocked<Logger>;
+  let mockLoggerService: LoggerService;
   let esqlService: EsqlService;
 
   beforeEach(() => {
     mockEsClient = elasticsearchServiceMock.createElasticsearchClient();
     mockLogger = loggerMock.create();
-    esqlService = new EsqlService(mockEsClient, mockLogger);
+    mockLoggerService = new LoggerService(mockLogger);
+    esqlService = new EsqlService(mockEsClient, mockLoggerService);
   });
 
   afterEach(() => {

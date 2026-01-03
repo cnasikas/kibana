@@ -6,17 +6,17 @@
  */
 
 import type { TaskManagerSetupContract } from '@kbn/task-manager-plugin/server';
-import type { Logger } from '@kbn/core/server';
 import type { RunContext } from '@kbn/task-manager-plugin/server';
 import { TaskPriority, TaskCost } from '@kbn/task-manager-plugin/server';
 import type { DirectorService } from './service';
+import type { LoggerService } from '../services/logger_service';
 
 export const DIRECTOR_TASK_TYPE = 'alerting_v2:director';
 
 export function registerDirectorTask(
   taskManager: TaskManagerSetupContract,
   getDirectorService: () => DirectorService,
-  logger: Logger
+  getLoggerService: () => LoggerService
 ): void {
   taskManager.registerTaskDefinitions({
     [DIRECTOR_TASK_TYPE]: {
@@ -30,9 +30,10 @@ export function registerDirectorTask(
       createTaskRunner: ({ taskInstance }: RunContext) => ({
         async run() {
           const directorService = getDirectorService();
+          const loggerService = getLoggerService();
           const taskId = taskInstance.id;
 
-          logger.debug(`Director task ${taskId} starting execution`);
+          loggerService.debug({ message: `Director task ${taskId} starting execution` });
 
           try {
             await directorService.run();
@@ -41,21 +42,18 @@ export function registerDirectorTask(
               state: {},
             };
           } catch (error) {
-            logger.error(`Director task ${taskId} failed: ${error.message}`, {
-              error: {
-                code: 'TASK_ERROR',
-                message: error.message,
-                stack_trace: error.stack,
-                type: 'DirectorTaskError',
-              },
-              taskId,
+            loggerService.error({
+              error,
+              code: 'TASK_ERROR',
+              type: 'DirectorTaskError',
             });
 
             throw error;
           }
         },
         async cancel() {
-          logger.debug(`Director task ${taskInstance.id} cancelled`);
+          const loggerService = getLoggerService();
+          loggerService.debug({ message: `Director task ${taskInstance.id} cancelled` });
         },
       }),
     },

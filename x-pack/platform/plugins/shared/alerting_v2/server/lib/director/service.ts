@@ -6,24 +6,23 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { Logger } from '@kbn/core/server';
-import type { EcsError } from '@elastic/ecs';
 import type { EsqlEsqlResult } from '@elastic/elasticsearch/lib/api/types';
 import { DETECT_SIGNAL_CHANGE_QUERY, DETECT_STATE_MATURATION_QUERY } from './queries';
 import { ALERT_TRANSITIONS_INDEX } from './constants';
 import type { TransitionDocument } from './types';
 import type { StorageService } from '../services/storage_service';
 import type { EsqlService } from '../services/esql_service';
+import type { LoggerService } from '../services/logger_service';
 
 export class DirectorService {
   constructor(
     private readonly storageService: StorageService,
     private readonly esqlService: EsqlService,
-    private readonly logger: Logger
+    private readonly logger: LoggerService
   ) {}
 
   async run(): Promise<void> {
-    this.logger.debug('DirectorService: Starting state transition detection');
+    this.logger.debug({ message: 'DirectorService: Starting state transition detection' });
 
     try {
       const [signalChangeResults, stateMaturationResults] = await Promise.all([
@@ -35,10 +34,9 @@ export class DirectorService {
         }),
       ]);
 
-      this.logger.debug(
-        `DirectorService: Signal change query returned ${signalChangeResults.values.length} transitions, ` +
-          `State maturation query returned ${stateMaturationResults.values.length} transitions`
-      );
+      this.logger.debug({
+        message: `DirectorService: Signal change query returned ${signalChangeResults.values.length} transitions, State maturation query returned ${stateMaturationResults.values.length} transitions`,
+      });
 
       const allTransitions = [
         ...this.parseQueryResponse(signalChangeResults),
@@ -46,7 +44,7 @@ export class DirectorService {
       ];
 
       if (allTransitions.length === 0) {
-        this.logger.debug('DirectorService: No state transitions detected');
+        this.logger.debug({ message: 'DirectorService: No state transitions detected' });
         return;
       }
 
@@ -55,12 +53,14 @@ export class DirectorService {
         docs: allTransitions,
       });
 
-      this.logger.debug(
-        `DirectorService: Successfully processed ${allTransitions.length} state transitions`
-      );
+      this.logger.debug({
+        message: `DirectorService: Successfully processed ${allTransitions.length} state transitions`,
+      });
     } catch (error) {
-      this.logger.error(`DirectorService: Error processing state transitions - ${error.message}`, {
-        error: this.buildError(error),
+      this.logger.error({
+        error,
+        code: 'DIRECTOR_SERVICE_ERROR',
+        type: 'DirectorServiceError',
       });
 
       throw error;
@@ -91,14 +91,5 @@ export class DirectorService {
     }
 
     return episodeId;
-  }
-
-  private buildError(error: Error): EcsError {
-    return {
-      code: 'DIRECTOR_SERVICE_ERROR',
-      message: error.message,
-      stack_trace: error.stack,
-      type: 'DirectorServiceError',
-    };
   }
 }

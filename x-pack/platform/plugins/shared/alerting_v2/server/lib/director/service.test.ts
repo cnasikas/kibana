@@ -13,6 +13,7 @@ import { elasticsearchServiceMock } from '@kbn/core-elasticsearch-server-mocks';
 import { DirectorService } from './service';
 import { StorageService } from '../services/storage_service';
 import { EsqlService } from '../services/esql_service';
+import { LoggerService } from '../services/logger_service';
 import { DETECT_SIGNAL_CHANGE_QUERY, DETECT_STATE_MATURATION_QUERY } from './queries';
 import { ALERT_TRANSITIONS_INDEX } from './constants';
 
@@ -21,15 +22,17 @@ describe('DirectorService', () => {
   let storageService: StorageService;
   let esqlService: EsqlService;
   let mockLogger: jest.Mocked<Logger>;
+  let mockLoggerService: LoggerService;
   let directorService: DirectorService;
 
   beforeEach(() => {
     mockEsClient = elasticsearchServiceMock.createElasticsearchClient();
     mockLogger = loggerMock.create();
+    mockLoggerService = new LoggerService(mockLogger);
 
-    storageService = new StorageService(mockEsClient, mockLogger);
-    esqlService = new EsqlService(mockEsClient, mockLogger);
-    directorService = new DirectorService(storageService, esqlService, mockLogger);
+    storageService = new StorageService(mockEsClient, mockLoggerService);
+    esqlService = new EsqlService(mockEsClient, mockLoggerService);
+    directorService = new DirectorService(storageService, esqlService, mockLoggerService);
   });
 
   afterEach(() => {
