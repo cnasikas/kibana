@@ -43,11 +43,7 @@ export class AlertingPlugin
   public setup(core: CoreSetup, plugins: AlertingServerSetupDependencies) {
     registerFeaturePrivileges(plugins.features);
 
-    registerDirectorTask(
-      plugins.taskManager,
-      () => this.serviceManager.getDirectorService(),
-      () => this.serviceManager.getLoggerService()
-    );
+    registerDirectorTask(plugins.taskManager, this.serviceManager);
 
     this.logger.info('Alerting V2 plugin setup completed');
   }

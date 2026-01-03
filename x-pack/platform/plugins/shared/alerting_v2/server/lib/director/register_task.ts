@@ -8,15 +8,13 @@
 import type { TaskManagerSetupContract } from '@kbn/task-manager-plugin/server';
 import type { RunContext } from '@kbn/task-manager-plugin/server';
 import { TaskPriority, TaskCost } from '@kbn/task-manager-plugin/server';
-import type { DirectorService } from './service';
-import type { LoggerService } from '../services/logger_service';
+import type { ServiceManager } from '../service_manager';
 
 export const DIRECTOR_TASK_TYPE = 'alerting_v2:director';
 
 export function registerDirectorTask(
   taskManager: TaskManagerSetupContract,
-  getDirectorService: () => DirectorService,
-  getLoggerService: () => LoggerService
+  serviceManager: ServiceManager
 ): void {
   taskManager.registerTaskDefinitions({
     [DIRECTOR_TASK_TYPE]: {
@@ -29,8 +27,8 @@ export function registerDirectorTask(
       priority: TaskPriority.Normal,
       createTaskRunner: ({ taskInstance }: RunContext) => ({
         async run() {
-          const directorService = getDirectorService();
-          const loggerService = getLoggerService();
+          const directorService = serviceManager.getDirectorService();
+          const loggerService = serviceManager.getLoggerService();
           const taskId = taskInstance.id;
 
           loggerService.debug({ message: `Director task ${taskId} starting execution` });
@@ -52,7 +50,7 @@ export function registerDirectorTask(
           }
         },
         async cancel() {
-          const loggerService = getLoggerService();
+          const loggerService = serviceManager.getLoggerService();
           loggerService.debug({ message: `Director task ${taskInstance.id} cancelled` });
         },
       }),

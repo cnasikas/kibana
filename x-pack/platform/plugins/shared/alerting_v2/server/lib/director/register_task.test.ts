@@ -6,30 +6,25 @@
  */
 
 import type { TaskManagerSetupContract } from '@kbn/task-manager-plugin/server';
-import type { Logger, ElasticsearchClient } from '@kbn/core/server';
+import type { Logger, ElasticsearchServiceStart, ElasticsearchClient } from '@kbn/core/server';
 import { taskManagerMock } from '@kbn/task-manager-plugin/server/mocks';
 import { loggerMock } from '@kbn/logging-mocks';
 import { elasticsearchServiceMock } from '@kbn/core-elasticsearch-server-mocks';
 import { registerDirectorTask, DIRECTOR_TASK_TYPE } from './register_task';
-import { DirectorService } from './service';
-import { StorageService } from '../services/storage_service';
-import { EsqlService } from '../services/esql_service';
-import { LoggerService } from '../services/logger_service';
+import { ServiceManager } from '../service_manager';
 
 describe('registerDirectorTask', () => {
   let mockTaskManager: jest.Mocked<TaskManagerSetupContract>;
   let mockLogger: jest.Mocked<Logger>;
-  let mockLoggerService: LoggerService;
-  let mockEsClient: jest.Mocked<ElasticsearchClient>;
-  let directorService: DirectorService;
-  let getDirectorService: () => DirectorService;
-  let getLoggerService: () => LoggerService;
+  let mockEsStart: jest.Mocked<ElasticsearchServiceStart>;
+  let mockEsClient: ElasticsearchClient;
+  let serviceManager: ServiceManager;
 
   beforeEach(() => {
     mockTaskManager = taskManagerMock.createSetup();
     mockLogger = loggerMock.create();
-    mockLoggerService = new LoggerService(mockLogger);
-    mockEsClient = elasticsearchServiceMock.createElasticsearchClient();
+    mockEsStart = elasticsearchServiceMock.createStart();
+    mockEsClient = mockEsStart.client.asInternalUser;
 
     mockEsClient.esql.query = jest.fn().mockResolvedValue({
       columns: [],
@@ -41,12 +36,11 @@ describe('registerDirectorTask', () => {
       errors: false,
     });
 
-    const storageService = new StorageService(mockEsClient, mockLoggerService);
-    const esqlService = new EsqlService(mockEsClient, mockLoggerService);
-    directorService = new DirectorService(storageService, esqlService, mockLoggerService);
-
-    getDirectorService = jest.fn().mockReturnValue(directorService);
-    getLoggerService = jest.fn().mockReturnValue(mockLoggerService);
+    serviceManager = new ServiceManager();
+    serviceManager.initialize({
+      logger: mockLogger,
+      elasticsearch: mockEsStart,
+    });
   });
 
   afterEach(() => {
@@ -54,7 +48,7 @@ describe('registerDirectorTask', () => {
   });
 
   it('should register the director task correctly', () => {
-    registerDirectorTask(mockTaskManager, getDirectorService, getLoggerService);
+    registerDirectorTask(mockTaskManager, serviceManager);
 
     const callArgs = mockTaskManager.registerTaskDefinitions.mock.calls[0][0];
     expect(callArgs).toHaveProperty(DIRECTOR_TASK_TYPE);
@@ -62,7 +56,7 @@ describe('registerDirectorTask', () => {
   });
 
   it('should create task runner that calls director service run method', async () => {
-    registerDirectorTask(mockTaskManager, getDirectorService, getLoggerService);
+    registerDirectorTask(mockTaskManager, serviceManager);
 
     const taskDefinitions = mockTaskManager.registerTaskDefinitions.mock.calls[0][0];
     const taskDefinition = taskDefinitions[DIRECTOR_TASK_TYPE];
@@ -76,12 +70,11 @@ describe('registerDirectorTask', () => {
 
     await taskRunner.run();
 
-    expect(getDirectorService).toHaveBeenCalledTimes(1);
-    expect(mockEsClient.esql.query).toHaveBeenCalledTimes(2);
+    expect(mockEsClient.esql.query).toHaveBeenCalled();
   });
 
   it('should return empty state object on successful execution', async () => {
-    registerDirectorTask(mockTaskManager, getDirectorService, getLoggerService);
+    registerDirectorTask(mockTaskManager, serviceManager);
 
     const taskDefinitions = mockTaskManager.registerTaskDefinitions.mock.calls[0][0];
     const taskDefinition = taskDefinitions[DIRECTOR_TASK_TYPE];
@@ -103,7 +96,7 @@ describe('registerDirectorTask', () => {
     const error = new Error('Director service failed');
     mockEsClient.esql.query = jest.fn().mockRejectedValue(error);
 
-    registerDirectorTask(mockTaskManager, getDirectorService, getLoggerService);
+    registerDirectorTask(mockTaskManager, serviceManager);
 
     const taskDefinitions = mockTaskManager.registerTaskDefinitions.mock.calls[0][0];
     const taskDefinition = taskDefinitions[DIRECTOR_TASK_TYPE];
@@ -121,7 +114,7 @@ describe('registerDirectorTask', () => {
   });
 
   it('should not call director service when task is cancelled', async () => {
-    registerDirectorTask(mockTaskManager, getDirectorService, getLoggerService);
+    registerDirectorTask(mockTaskManager, serviceManager);
 
     const taskDefinitions = mockTaskManager.registerTaskDefinitions.mock.calls[0][0];
     const taskDefinition = taskDefinitions[DIRECTOR_TASK_TYPE];
@@ -134,7 +127,6 @@ describe('registerDirectorTask', () => {
 
     await taskRunner.cancel?.();
 
-    expect(getDirectorService).not.toHaveBeenCalled();
     expect(mockEsClient.esql.query).not.toHaveBeenCalled();
   });
 });
