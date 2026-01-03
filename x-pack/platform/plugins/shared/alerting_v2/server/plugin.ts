@@ -44,8 +44,6 @@ export class AlertingPlugin
     registerFeaturePrivileges(plugins.features);
 
     registerDirectorTask(plugins.taskManager, this.serviceManager);
-
-    this.logger.info('Alerting V2 plugin setup completed');
   }
 
   public start(core: CoreStart, plugins: AlertingServerStartDependencies) {
@@ -55,12 +53,8 @@ export class AlertingPlugin
       elasticsearch: core.elasticsearch,
     });
 
-    this.logger.info('Alerting V2 plugin started successfully');
-
     return;
   }
 
-  public stop() {
-    this.logger.info('Alerting V2 plugin stopped');
-  }
+  public stop() {}
 }
