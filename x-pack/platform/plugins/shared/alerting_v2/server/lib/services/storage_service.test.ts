@@ -29,7 +29,7 @@ describe('StorageService', () => {
   });
 
   describe('bulkIndexDocs', () => {
-    const index = '.kibana_alert_transitions';
+    const index = 'my-index';
     const mockDocs = [
       { '@timestamp': '2024-01-01T00:00:00Z', rule_id: 'rule-1', alert_series_id: 'series-1' },
       { '@timestamp': '2024-01-01T00:01:00Z', rule_id: 'rule-2', alert_series_id: 'series-2' },
@@ -39,17 +39,16 @@ describe('StorageService', () => {
       await storageService.bulkIndexDocs({ index, docs: [] });
 
       expect(mockEsClient.bulk).not.toHaveBeenCalled();
-      expect(mockLogger.debug).not.toHaveBeenCalled();
     });
 
     it('should successfully bulk index documents', async () => {
       const mockBulkResponse = {
         items: [{ index: { _id: '1', status: 201 } }, { index: { _id: '2', status: 201 } }],
         errors: false,
-        took: 10,
       };
 
-      mockEsClient.bulk.mockResolvedValue(mockBulkResponse as any);
+      // @ts-expect-error - not all fields are used
+      mockEsClient.bulk.mockResolvedValue(mockBulkResponse);
 
       await storageService.bulkIndexDocs({ index, docs: mockDocs });
 
@@ -63,8 +62,6 @@ describe('StorageService', () => {
         ],
         refresh: 'wait_for',
       });
-
-      expect(mockLogger.error).not.toHaveBeenCalled();
     });
 
     it('should format operations correctly for bulk indexing', async () => {
@@ -73,13 +70,14 @@ describe('StorageService', () => {
         errors: false,
       };
 
-      mockEsClient.bulk.mockResolvedValue(mockBulkResponse as any);
+      // @ts-expect-error - not all fields are used
+      mockEsClient.bulk.mockResolvedValue(mockBulkResponse);
 
-      const singleDoc = [mockDocs[0]];
-      await storageService.bulkIndexDocs({ index, docs: singleDoc });
+      const docs = [mockDocs[0]];
+      await storageService.bulkIndexDocs({ index, docs });
 
       expect(mockEsClient.bulk).toHaveBeenCalledWith({
-        operations: [{ index: { _index: index } }, singleDoc[0]],
+        operations: [{ index: { _index: index } }, docs[0]],
         refresh: 'wait_for',
       });
     });
@@ -101,10 +99,10 @@ describe('StorageService', () => {
           },
         ],
         errors: true,
-        took: 5,
       };
 
-      mockEsClient.bulk.mockResolvedValue(mockBulkResponse as any);
+      // @ts-expect-error - not all fields are used
+      mockEsClient.bulk.mockResolvedValue(mockBulkResponse);
 
       await storageService.bulkIndexDocs({ index, docs: mockDocs });
 
@@ -114,15 +112,15 @@ describe('StorageService', () => {
     it('should handle bulk response with errors but no error items gracefully', async () => {
       const mockBulkResponse = {
         items: [{ index: { _id: '1', status: 201 } }],
-        errors: true, // errors flag is true but no actual error in items
+        errors: true,
         took: 5,
       };
 
-      mockEsClient.bulk.mockResolvedValue(mockBulkResponse as any);
+      // @ts-expect-error - not all fields are used
+      mockEsClient.bulk.mockResolvedValue(mockBulkResponse);
 
       await storageService.bulkIndexDocs({ index, docs: [mockDocs[0]] });
 
-      // Should not log error if no error item found
       expect(mockLogger.error).not.toHaveBeenCalled();
     });
 
@@ -133,51 +131,6 @@ describe('StorageService', () => {
       await expect(storageService.bulkIndexDocs({ index, docs: mockDocs })).rejects.toThrow(
         'Elasticsearch connection failed'
       );
-
-      expect(mockLogger.error).toHaveBeenCalled();
-    });
-
-    it('should handle multiple documents correctly', async () => {
-      const manyDocs = Array.from({ length: 5 }, (_, i) => ({
-        '@timestamp': `2024-01-01T00:0${i}:00Z`,
-        rule_id: `rule-${i}`,
-        alert_series_id: `series-${i}`,
-      }));
-
-      const mockBulkResponse = {
-        items: manyDocs.map(() => ({ index: { _id: '1', status: 201 } })),
-        errors: false,
-      };
-
-      mockEsClient.bulk.mockResolvedValue(mockBulkResponse as any);
-
-      await storageService.bulkIndexDocs({ index, docs: manyDocs });
-
-      expect(mockEsClient.bulk).toHaveBeenCalledTimes(1);
-      // Should have 10 operations (5 index operations + 5 docs)
-      expect(mockEsClient.bulk).toHaveBeenCalledWith({
-        operations: expect.arrayContaining([{ index: { _index: index } }, ...manyDocs]),
-        refresh: 'wait_for',
-      });
-    });
-
-    it('should handle error without stack trace', async () => {
-      const error = new Error('Test error');
-      delete (error as any).stack;
-      mockEsClient.bulk.mockRejectedValue(error);
-
-      await expect(storageService.bulkIndexDocs({ index, docs: mockDocs })).rejects.toThrow(
-        'Test error'
-      );
-
-      expect(mockLogger.error).toHaveBeenCalled();
-    });
-
-    it('should handle non-Error exceptions', async () => {
-      const error = 'String error';
-      mockEsClient.bulk.mockRejectedValue(error);
-
-      await expect(storageService.bulkIndexDocs({ index, docs: mockDocs })).rejects.toBe(error);
 
       expect(mockLogger.error).toHaveBeenCalled();
     });

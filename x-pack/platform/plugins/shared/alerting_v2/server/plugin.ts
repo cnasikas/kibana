@@ -47,7 +47,6 @@ export class AlertingPlugin
   }
 
   public start(core: CoreStart, plugins: AlertingServerStartDependencies) {
-    // Initialize all services with their dependencies
     this.serviceManager.initialize({
       logger: this.logger,
       elasticsearch: core.elasticsearch,

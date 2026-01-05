@@ -40,7 +40,7 @@ export class StorageService {
       });
     } catch (error) {
       this.logger.error({
-        error: error instanceof Error ? error : new Error(String(error)),
+        error,
         code: 'BULK_INDEX_ERROR',
         type: 'StorageServiceError',
       });
