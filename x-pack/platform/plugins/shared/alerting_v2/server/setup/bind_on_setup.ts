@@ -10,6 +10,7 @@ import type { CoreStart } from '@kbn/core/server';
 import { Logger, OnSetup, PluginSetup } from '@kbn/core-di';
 import { CoreSetup, PluginInitializer } from '@kbn/core-di-server';
 import { initializeRuleExecutorTaskDefinition } from '../lib/rule_executor';
+import { registerDirectorTask } from '../lib/director/register_task';
 import { registerFeaturePrivileges } from '../lib/security/privileges';
 import type { PluginConfig } from '../config';
 import type { AlertingServerSetupDependencies, AlertingServerStartDependencies } from '../types';
@@ -45,5 +46,7 @@ export function bindOnSetup({ bind }: ContainerModuleLoadOptions) {
       alertingConfig,
       container
     );
+
+    registerDirectorTask(taskManagerSetup, container);
   });
 }
