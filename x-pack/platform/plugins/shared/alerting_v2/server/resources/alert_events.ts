@@ -36,6 +36,8 @@ const mappings: estypes.MappingTypeMapping = {
       properties: {
         id: { type: 'keyword' },
         tags: { type: 'keyword' },
+        breach_count: { type: 'long' },
+        recover_count: { type: 'long' },
       },
     },
     grouping: {
@@ -60,6 +62,8 @@ export const alertEventSchema = z.object({
   rule: z.object({
     id: z.string(),
     tags: z.array(z.string()),
+    breach_count: z.number().optional().default(0),
+    recover_count: z.number().optional().default(0),
   }),
   grouping: z.object({
     key: z.string(),
