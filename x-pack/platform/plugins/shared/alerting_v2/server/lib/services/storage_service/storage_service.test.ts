@@ -55,9 +55,9 @@ describe('StorageService', () => {
       expect(mockEsClient.bulk).toHaveBeenCalledTimes(1);
       expect(mockEsClient.bulk).toHaveBeenCalledWith({
         operations: [
-          { index: { _index: index } },
+          { create: { _index: index } },
           mockDocs[0],
-          { index: { _index: index } },
+          { create: { _index: index } },
           mockDocs[1],
         ],
         refresh: 'wait_for',
@@ -77,7 +77,7 @@ describe('StorageService', () => {
       await storageService.bulkIndexDocs({ index, docs });
 
       expect(mockEsClient.bulk).toHaveBeenCalledWith({
-        operations: [{ index: { _index: index } }, docs[0]],
+        operations: [{ create: { _index: index } }, docs[0]],
         refresh: 'wait_for',
       });
     });

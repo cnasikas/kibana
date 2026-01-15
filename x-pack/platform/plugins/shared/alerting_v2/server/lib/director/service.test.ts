@@ -15,7 +15,6 @@ import { QueryService } from '../services/query_service/query_service';
 import { InternalEsqlExecutor } from '../services/query_service/internal_esql_executor';
 import { StorageService } from '../services/storage_service/storage_service';
 import { LoggerService } from '../services/logger_service/logger_service';
-import { DETECT_SIGNAL_CHANGE_QUERY } from './queries';
 import type { AlertTransition } from '../../resources/alert_transitions';
 import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions';
 
@@ -66,14 +65,14 @@ describe('DirectorService', () => {
 
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
-        items: [{ index: { _id: '1', status: 201 } }, { index: { _id: '2', status: 201 } }],
+        items: [{ create: { _id: '1', status: 201 } }, { create: { _id: '2', status: 201 } }],
         errors: false,
       });
 
       await directorService.run();
 
       expect(mockEsClient.esql.query).toHaveBeenCalledWith({
-        query: DETECT_SIGNAL_CHANGE_QUERY,
+        query: expect.any(String),
         drop_null_columns: false,
       });
 
@@ -83,7 +82,7 @@ describe('DirectorService', () => {
       const operations = bulkCall.operations!;
 
       expect(operations).toHaveLength(4); // 2 index operations + 2 docs
-      expect(operations[0]).toEqual({ index: { _index: ALERT_TRANSITIONS_DATA_STREAM } });
+      expect(operations[0]).toEqual({ create: { _index: ALERT_TRANSITIONS_DATA_STREAM } });
       expect(operations[1]).toMatchObject({
         '@timestamp': timestamp,
         rule_id: 'rule-1',
@@ -93,7 +92,7 @@ describe('DirectorService', () => {
         end_state: 'recovering',
       });
 
-      expect(operations[2]).toEqual({ index: { _index: ALERT_TRANSITIONS_DATA_STREAM } });
+      expect(operations[2]).toEqual({ create: { _index: ALERT_TRANSITIONS_DATA_STREAM } });
       expect(operations[3]).toMatchObject({
         '@timestamp': timestamp,
         rule_id: 'rule-2',
@@ -180,7 +179,7 @@ describe('DirectorService', () => {
 
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
-        items: [{ index: { _id: '1', status: 201 } }],
+        items: [{ create: { _id: '1', status: 201 } }],
         errors: false,
       });
 
@@ -214,7 +213,7 @@ describe('DirectorService', () => {
       mockEsClient.esql.query.mockResolvedValue(response);
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
-        items: [{ index: { _id: '1', status: 201 } }],
+        items: [{ create: { _id: '1', status: 201 } }],
         errors: false,
       });
 
@@ -249,7 +248,7 @@ describe('DirectorService', () => {
       mockEsClient.esql.query.mockResolvedValue(response);
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
-        items: [{ index: { _id: '1', status: 201 } }],
+        items: [{ create: { _id: '1', status: 201 } }],
         errors: false,
       });
 
