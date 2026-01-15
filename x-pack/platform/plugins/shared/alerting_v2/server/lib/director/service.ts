@@ -8,18 +8,19 @@
 import { randomUUID } from 'crypto';
 import type { ESQLSearchResponse } from '@kbn/es-types';
 import { inject, injectable } from 'inversify';
-import { QueryService } from '../services/query_service/query_service';
+import type { QueryService } from '../services/query_service/query_service';
 import type { StorageService } from '../services/storage_service/storage_service';
 import { LoggerService } from '../services/logger_service/logger_service';
 import { DETECT_SIGNAL_CHANGE_QUERY } from './queries';
 import { StorageServiceInternalToken } from '../services/storage_service/tokens';
 import type { AlertTransition } from '../../resources/alert_transitions';
 import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions';
+import { QueryServiceInternalToken } from '../services/query_service/tokens';
 
 @injectable()
 export class DirectorService {
   constructor(
-    @inject(QueryService) private readonly queryService: QueryService,
+    @inject(QueryServiceInternalToken) private readonly queryService: QueryService,
     @inject(StorageServiceInternalToken) private readonly storageService: StorageService,
     @inject(LoggerService) private readonly logger: LoggerService
   ) {}

@@ -5,13 +5,10 @@
  * 2.0.
  */
 
-import type { IScopedSearchClient } from '@kbn/data-plugin/server';
-import { ESQL_SEARCH_STRATEGY, isRunningResponse } from '@kbn/data-plugin/common';
 import type { ESQLSearchParams, ESQLSearchResponse } from '@kbn/es-types';
-import type { IKibanaSearchRequest, IKibanaSearchResponse } from '@kbn/search-types';
-import { catchError, filter as rxFilter, lastValueFrom, map, throwError } from 'rxjs';
 import { inject, injectable } from 'inversify';
 import { LoggerService } from '../logger_service/logger_service';
+import type { IEsqlExecutor } from './esql_executor';
 
 interface ExecuteQueryParams {
   query: ESQLSearchParams['query'];
@@ -22,7 +19,7 @@ interface ExecuteQueryParams {
 @injectable()
 export class QueryService {
   constructor(
-    private readonly searchClient: IScopedSearchClient,
+    private readonly executor: IEsqlExecutor,
     @inject(LoggerService) private readonly logger: LoggerService
   ) {}
 
@@ -33,36 +30,7 @@ export class QueryService {
           `QueryService: Executing query - ${JSON.stringify({ query, filter, params })}`,
       });
 
-      const request: IKibanaSearchRequest<ESQLSearchParams> = {
-        params: {
-          query,
-          dropNullColumns: false,
-          filter,
-          params,
-        },
-      };
-
-      const searchResponse = await lastValueFrom(
-        this.searchClient
-          .search<
-            IKibanaSearchRequest<ESQLSearchParams>,
-            IKibanaSearchResponse<ESQLSearchResponse>
-          >(request, {
-            strategy: ESQL_SEARCH_STRATEGY,
-          })
-          .pipe(
-            catchError((error) => {
-              this.logger.error({
-                error,
-                code: 'ESQL_QUERY_ERROR',
-                type: 'QueryServiceError',
-              });
-              return throwError(() => error);
-            }),
-            rxFilter((resp) => !isRunningResponse(resp)),
-            map((resp) => resp.rawResponse)
-          )
-      );
+      const searchResponse = await this.executor.execute({ query, filter, params });
 
       this.logger.debug({
         message: `QueryService: Query executed successfully, returned ${searchResponse.values.length} rows`,

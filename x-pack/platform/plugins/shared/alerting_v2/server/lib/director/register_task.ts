@@ -28,14 +28,8 @@ export function registerDirectorTask(
       maxAttempts: 3,
       cost: TaskCost.Normal,
       priority: TaskPriority.Normal,
-      createTaskRunner: ({ taskInstance, fakeRequest }: RunContext) => ({
+      createTaskRunner: ({ taskInstance }: RunContext) => ({
         async run() {
-          if (!fakeRequest) {
-            throw new Error(
-              `Cannot execute director task without Task Manager fakeRequest. Ensure the task is scheduled with an API key (task id: ${taskInstance.id})`
-            );
-          }
-
           const taskId = taskInstance.id;
 
           const loggerService = container.get(LoggerService);

@@ -6,16 +6,13 @@
  */
 
 import { randomUUID } from 'crypto';
-import { of, throwError } from 'rxjs';
 import type { Logger } from '@kbn/core/server';
 import type { ESQLSearchResponse } from '@kbn/es-types';
-import type { IScopedSearchClient } from '@kbn/data-plugin/server';
 import { loggerMock } from '@kbn/logging-mocks';
 import { elasticsearchServiceMock } from '@kbn/core-elasticsearch-server-mocks';
-import { dataPluginMock } from '@kbn/data-plugin/server/mocks';
-import { httpServerMock } from '@kbn/core/server/mocks';
 import { DirectorService } from './service';
 import { QueryService } from '../services/query_service/query_service';
+import { InternalEsqlExecutor } from '../services/query_service/internal_esql_executor';
 import { StorageService } from '../services/storage_service/storage_service';
 import { LoggerService } from '../services/logger_service/logger_service';
 import { DETECT_SIGNAL_CHANGE_QUERY } from './queries';
@@ -24,7 +21,6 @@ import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions
 
 describe('DirectorService', () => {
   let mockEsClient: ReturnType<typeof elasticsearchServiceMock.createElasticsearchClient>;
-  let mockSearchClient: jest.Mocked<IScopedSearchClient>;
   let mockLogger: jest.Mocked<Logger>;
   let mockLoggerService: LoggerService;
   let queryService: QueryService;
@@ -36,12 +32,7 @@ describe('DirectorService', () => {
     mockLogger = loggerMock.create();
     mockLoggerService = new LoggerService(mockLogger);
 
-    // @ts-expect-error - dataPluginMock is not typed correctly
-    mockSearchClient = dataPluginMock
-      .createStartContract()
-      .search.asScoped(httpServerMock.createKibanaRequest({}));
-
-    queryService = new QueryService(mockSearchClient, mockLoggerService);
+    queryService = new QueryService(new InternalEsqlExecutor(mockEsClient), mockLoggerService);
     storageService = new StorageService(mockEsClient, mockLoggerService);
     directorService = new DirectorService(queryService, storageService, mockLoggerService);
   });
@@ -70,12 +61,8 @@ describe('DirectorService', () => {
         ],
       };
 
-      mockSearchClient.search.mockReturnValue(
-        of({
-          isRunning: false,
-          rawResponse: mockQueryResponse,
-        })
-      );
+      // @ts-expect-error - not all fields are used
+      mockEsClient.esql.query.mockResolvedValue(mockQueryResponse);
 
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
@@ -85,18 +72,10 @@ describe('DirectorService', () => {
 
       await directorService.run();
 
-      expect(mockSearchClient.search).toHaveBeenCalledTimes(1);
-      expect(mockSearchClient.search).toHaveBeenCalledWith(
-        {
-          params: {
-            query: DETECT_SIGNAL_CHANGE_QUERY,
-            dropNullColumns: false,
-          },
-        },
-        {
-          strategy: 'esql',
-        }
-      );
+      expect(mockEsClient.esql.query).toHaveBeenCalledWith({
+        query: DETECT_SIGNAL_CHANGE_QUERY,
+        drop_null_columns: false,
+      });
 
       expect(mockEsClient.bulk).toHaveBeenCalledTimes(1);
       const bulkCall = mockEsClient.bulk.mock.calls[0][0];
@@ -136,22 +115,18 @@ describe('DirectorService', () => {
         values: [],
       };
 
-      mockSearchClient.search.mockReturnValue(
-        of({
-          isRunning: false,
-          rawResponse: emptyResponse,
-        })
-      );
+      // @ts-expect-error - not all fields are used
+      mockEsClient.esql.query.mockResolvedValue(emptyResponse);
 
       await directorService.run();
 
-      expect(mockSearchClient.search).toHaveBeenCalledTimes(1);
+      expect(mockEsClient.esql.query).toHaveBeenCalledTimes(1);
       expect(mockEsClient.bulk).not.toHaveBeenCalled();
     });
 
     it('should throw and log error when query execution fails', async () => {
       const error = new Error('ES|QL query failed');
-      mockSearchClient.search.mockReturnValue(throwError(() => error));
+      mockEsClient.esql.query.mockRejectedValue(error);
 
       await expect(directorService.run()).rejects.toThrow('ES|QL query failed');
 
@@ -175,12 +150,8 @@ describe('DirectorService', () => {
 
       const bulkError = new Error('Bulk indexing failed');
 
-      mockSearchClient.search.mockReturnValue(
-        of({
-          isRunning: false,
-          rawResponse: response,
-        })
-      );
+      // @ts-expect-error - not all fields are used
+      mockEsClient.esql.query.mockResolvedValue(response);
       mockEsClient.bulk.mockRejectedValue(bulkError);
 
       await expect(directorService.run()).rejects.toThrow('Bulk indexing failed');
@@ -204,12 +175,8 @@ describe('DirectorService', () => {
         values: [[timestamp, 'rule-1', 'series-1', 'old-episode-id', 'inactive', 'pending']],
       };
 
-      mockSearchClient.search.mockReturnValue(
-        of({
-          isRunning: false,
-          rawResponse: response,
-        })
-      );
+      // @ts-expect-error - not all fields are used
+      mockEsClient.esql.query.mockResolvedValue(response);
 
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
@@ -243,12 +210,8 @@ describe('DirectorService', () => {
         values: [[timestamp, 'rule-1', 'series-1', null, 'pending', 'active']],
       };
 
-      mockSearchClient.search.mockReturnValue(
-        of({
-          isRunning: false,
-          rawResponse: response,
-        })
-      );
+      // @ts-expect-error - not all fields are used
+      mockEsClient.esql.query.mockResolvedValue(response);
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
         items: [{ index: { _id: '1', status: 201 } }],
@@ -282,12 +245,8 @@ describe('DirectorService', () => {
         values: [[timestamp, 'rule-1', 'series-1', existingEpisodeId, 'active', 'recovering']],
       };
 
-      mockSearchClient.search.mockReturnValue(
-        of({
-          isRunning: false,
-          rawResponse: response,
-        })
-      );
+      // @ts-expect-error - not all fields are used
+      mockEsClient.esql.query.mockResolvedValue(response);
       mockEsClient.bulk.mockResolvedValue({
         // @ts-expect-error - not all fields are used
         items: [{ index: { _id: '1', status: 201 } }],
