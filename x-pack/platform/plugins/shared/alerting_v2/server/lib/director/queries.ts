@@ -8,10 +8,11 @@
 import { ALERT_EVENTS_DATA_STREAM } from '../../resources/alert_events';
 import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions';
 
-export const DETECT_SIGNAL_CHANGE_QUERY = `
+export const getDetectSignalChangeQuery = (timeFilter: string) =>
+  `
 FROM ${ALERT_EVENTS_DATA_STREAM}, ${ALERT_TRANSITIONS_DATA_STREAM}
     METADATA _index
-  {timeFilter}
+  ${timeFilter}
   | EVAL rule_id = COALESCE(rule.id, rule_id)
   | INLINE STATS
       last_transition_event_timestamp = MAX(last_event_timestamp) WHERE
@@ -37,8 +38,8 @@ FROM ${ALERT_EVENTS_DATA_STREAM}, ${ALERT_TRANSITIONS_DATA_STREAM}
         status == "recover" AND
           @timestamp >= last_transition_event_timestamp AND
           (@timestamp > last_breach_timestamp OR last_breach_timestamp IS NULL),
-      breach_count_threshold = LAST(rule.breach_count, @timestamp),
-      recover_count_threshold = LAST(rule.recover_count, @timestamp)
+      breach_count_threshold = COALESCE(LAST(rule.breach_count, @timestamp), 0),
+      recover_count_threshold = COALESCE(LAST(rule.recover_count, @timestamp), 0)
         BY rule_id, alert_series_id
   | EVAL
       next_state =

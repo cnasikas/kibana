@@ -11,7 +11,7 @@ import { inject, injectable } from 'inversify';
 import type { QueryService } from '../services/query_service/query_service';
 import type { StorageService } from '../services/storage_service/storage_service';
 import { LoggerService } from '../services/logger_service/logger_service';
-import { DETECT_SIGNAL_CHANGE_QUERY } from './queries';
+import { getDetectSignalChangeQuery } from './queries';
 import { StorageServiceInternalToken } from '../services/storage_service/tokens';
 import type { AlertTransition } from '../../resources/alert_transitions';
 import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions';
@@ -30,9 +30,11 @@ export class DirectorService {
       message: 'DirectorService: Starting state transition detection',
     });
 
+    const query = getDetectSignalChangeQuery('');
+
     try {
       const queryResponse = await this.queryService.executeQuery({
-        query: DETECT_SIGNAL_CHANGE_QUERY,
+        query,
       });
 
       this.logger.debug({
@@ -71,7 +73,7 @@ export class DirectorService {
     const queryResults = this.queryService.queryResponseToRecords<AlertTransition>(response);
 
     return queryResults.map((result) => ({
-      '@timestamp': result['@timestamp'],
+      '@timestamp': new Date().toISOString(),
       rule_id: result.rule_id,
       alert_series_id: result.alert_series_id,
       episode_id: this.getEpisodeId({
@@ -80,6 +82,7 @@ export class DirectorService {
       }),
       start_state: result.start_state,
       end_state: result.end_state,
+      last_event_timestamp: result.last_event_timestamp,
     }));
   }
 
