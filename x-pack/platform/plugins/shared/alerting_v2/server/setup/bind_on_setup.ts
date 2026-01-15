@@ -29,7 +29,7 @@ export function bindOnSetup({ bind }: ContainerModuleLoadOptions) {
       logger,
     });
 
-    const taskManagerSetup = container.get(
+    const taskManager = container.get(
       PluginSetup<AlertingServerSetupDependencies['taskManager']>('taskManager')
     );
 
@@ -41,12 +41,12 @@ export function bindOnSetup({ bind }: ContainerModuleLoadOptions) {
 
     initializeRuleExecutorTaskDefinition(
       logger,
-      taskManagerSetup,
+      taskManager,
       startServices,
       alertingConfig,
       container
     );
 
-    registerDirectorTask(taskManagerSetup, container);
+    registerDirectorTask(taskManager, container);
   });
 }

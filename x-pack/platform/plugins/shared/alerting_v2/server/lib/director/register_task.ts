@@ -12,8 +12,7 @@ import type { Container } from 'inversify';
 import { DirectorService } from './service';
 import { LoggerService } from '../services/logger_service/logger_service';
 import { ResourceManager } from '../services/resource_service/resource_manager';
-
-export const DIRECTOR_TASK_TYPE = 'alerting_v2:director';
+import { DIRECTOR_TASK_TYPE } from './constants';
 
 export function registerDirectorTask(
   taskManager: TaskManagerSetupContract,
