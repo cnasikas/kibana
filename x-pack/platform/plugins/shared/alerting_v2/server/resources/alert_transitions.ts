@@ -31,6 +31,7 @@ const mappings: estypes.MappingTypeMapping = {
   dynamic: false,
   properties: {
     '@timestamp': { type: 'date' },
+    last_event_timestamp: { type: 'date' },
     alert_series_id: { type: 'keyword' },
     episode_id: { type: 'keyword' },
     rule_id: { type: 'keyword' },
@@ -45,6 +46,7 @@ export const alertTransitionStates = alertTransitionStateSchema.enum;
 
 export const alertTransitionSchema = z.object({
   '@timestamp': z.string(),
+  last_event_timestamp: z.string().optional(),
   alert_series_id: z.string(),
   episode_id: z.string(),
   rule_id: z.string(),
