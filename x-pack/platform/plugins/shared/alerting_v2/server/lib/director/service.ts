@@ -16,6 +16,11 @@ import { StorageServiceInternalToken } from '../services/storage_service/tokens'
 import type { AlertTransition } from '../../resources/alert_transitions';
 import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions';
 import { QueryServiceInternalToken } from '../services/query_service/tokens';
+import { DIRECTOR_QUERY_LOOKBACK_WINDOW } from './constants';
+
+interface DirectorRunParams {
+  from?: Date | null;
+}
 
 @injectable()
 export class DirectorService {
@@ -25,12 +30,12 @@ export class DirectorService {
     @inject(LoggerService) private readonly logger: LoggerService
   ) {}
 
-  async run(): Promise<void> {
+  async run({ from }: DirectorRunParams = {}): Promise<void> {
     this.logger.debug({
       message: 'DirectorService: Starting state transition detection',
     });
 
-    const query = getDetectSignalChangeQuery('');
+    const query = getDetectSignalChangeQuery(this.getLookbackWindow(from));
 
     try {
       const queryResponse = await this.queryService.executeQuery({
@@ -98,5 +103,13 @@ export class DirectorService {
     }
 
     return episodeId;
+  }
+
+  private getLookbackWindow(from?: Date | null): Date | null {
+    if (from) {
+      return new Date(from.getTime() - DIRECTOR_QUERY_LOOKBACK_WINDOW);
+    }
+
+    return null;
   }
 }

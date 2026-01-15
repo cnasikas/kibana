@@ -8,11 +8,16 @@
 import { ALERT_EVENTS_DATA_STREAM } from '../../resources/alert_events';
 import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions';
 
-export const getDetectSignalChangeQuery = (timeFilter: string) =>
+const getLookbackWindowFilter = (lookbackWindow?: Date | null): string =>
+  lookbackWindow
+    ? `| WHERE _index != "${ALERT_EVENTS_DATA_STREAM}" OR @timestamp > "${lookbackWindow.toISOString()}"`
+    : '';
+
+export const getDetectSignalChangeQuery = (lookbackWindow?: Date | null): string =>
   `
 FROM ${ALERT_EVENTS_DATA_STREAM}, ${ALERT_TRANSITIONS_DATA_STREAM}
     METADATA _index
-  ${timeFilter}
+  ${getLookbackWindowFilter(lookbackWindow)}
   | EVAL rule_id = COALESCE(rule.id, rule_id)
   | INLINE STATS
       last_transition_event_timestamp = MAX(last_event_timestamp) WHERE

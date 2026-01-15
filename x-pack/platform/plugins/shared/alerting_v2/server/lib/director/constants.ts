@@ -6,3 +6,4 @@
  */
 
 export const DIRECTOR_TASK_TYPE = 'alerting_v2:director';
+export const DIRECTOR_QUERY_LOOKBACK_WINDOW = 5000; // 5 seconds

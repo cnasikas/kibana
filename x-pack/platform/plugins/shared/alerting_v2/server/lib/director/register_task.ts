@@ -30,6 +30,7 @@ export function registerDirectorTask(
       createTaskRunner: ({ taskInstance }: RunContext) => ({
         async run() {
           const taskId = taskInstance.id;
+          const from = taskInstance.startedAt;
 
           const loggerService = container.get(LoggerService);
           const directorService = container.get(DirectorService);
@@ -41,7 +42,7 @@ export function registerDirectorTask(
 
           try {
             await resourcesService.waitUntilReady();
-            await directorService.run();
+            await directorService.run({ from });
 
             return {
               state: {},
