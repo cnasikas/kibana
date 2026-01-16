@@ -29,9 +29,15 @@ export function bindOnStart({ bind }: ContainerModuleLoadOptions) {
       esClient,
     });
 
-    scheduleDirectorTask({
+    void scheduleDirectorTask({
       taskManager,
       logger,
+    }).catch(() => {
+      logger.error({
+        error: new Error('Failed to schedule director task'),
+        code: 'TASK_ERROR',
+        type: 'DirectorTaskError',
+      });
     });
   });
 }
