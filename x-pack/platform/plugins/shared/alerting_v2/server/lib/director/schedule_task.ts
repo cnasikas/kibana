@@ -26,7 +26,7 @@ export const scheduleDirectorTask = async ({
     params: {},
     state: {},
     schedule: {
-      interval: '1m',
+      interval: '5s',
     },
     scope: ['alerting'],
     enabled: true,

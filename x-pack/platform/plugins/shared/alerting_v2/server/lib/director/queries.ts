@@ -8,6 +8,9 @@
 import { ALERT_EVENTS_DATA_STREAM } from '../../resources/alert_events';
 import { ALERT_TRANSITIONS_DATA_STREAM } from '../../resources/alert_transitions';
 
+/**
+ * Filter to recent alert events and all transition history
+ */
 const getLookbackWindowFilter = (lookbackWindow?: Date | null): string =>
   lookbackWindow
     ? `| WHERE _index != "${ALERT_EVENTS_DATA_STREAM}" OR @timestamp > "${lookbackWindow.toISOString()}"`

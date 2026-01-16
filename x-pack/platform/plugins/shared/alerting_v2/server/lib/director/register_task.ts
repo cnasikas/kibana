@@ -24,17 +24,17 @@ export function registerDirectorTask(
       description:
         'Processes alert state transitions by executing ES|QL queries to detect signal changes and state maturation',
       timeout: '60m',
-      maxAttempts: 3,
       cost: TaskCost.Normal,
       priority: TaskPriority.Normal,
       createTaskRunner: ({ taskInstance }: RunContext) => ({
         async run() {
-          const taskId = taskInstance.id;
-          const from = taskInstance.startedAt;
-
           const loggerService = container.get(LoggerService);
           const directorService = container.get(DirectorService);
           const resourcesService = container.get(ResourceManager);
+
+          const taskId = taskInstance.id;
+          const lastQueryAt = new Date().toISOString();
+          const from = taskInstance.state?.lastQueryAt;
 
           loggerService.debug({
             message: `Director task ${taskId} starting execution`,
@@ -45,7 +45,9 @@ export function registerDirectorTask(
             await directorService.run({ from });
 
             return {
-              state: {},
+              state: {
+                lastQueryAt,
+              },
             };
           } catch (error) {
             loggerService.error({
@@ -59,9 +61,14 @@ export function registerDirectorTask(
         },
         async cancel() {
           const loggerService = container.get(LoggerService);
+
           loggerService.debug({
             message: `Director task ${taskInstance.id} cancelled`,
           });
+
+          return {
+            state: taskInstance.state,
+          };
         },
       }),
     },
