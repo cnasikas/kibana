@@ -158,6 +158,7 @@ export default function ({ getService }: FtrProviderContext) {
         'alerting_health_check',
         'alerting_telemetry',
         'alerting_v2:rule_executor',
+        'alerting_v2:director',
         'alerts_invalidate_api_keys',
         'apm-source-map-migration-task',
         'apm-telemetry-task',
