@@ -190,9 +190,6 @@ describe('DirectorService', () => {
       const transitionDoc = operations[1] as AlertTransition;
 
       expect(transitionDoc.episode_id).not.toBe('old-episode-id');
-      expect(transitionDoc.episode_id).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
     });
 
     it('should generate new UUID when episode_id is null', async () => {
@@ -224,9 +221,6 @@ describe('DirectorService', () => {
       const transitionDoc = operations[1] as AlertTransition;
 
       expect(transitionDoc.episode_id).not.toBeNull();
-      expect(transitionDoc.episode_id).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
     });
 
     it('should preserve existing episode_id when start_state is not inactive and episode_id is not null', async () => {

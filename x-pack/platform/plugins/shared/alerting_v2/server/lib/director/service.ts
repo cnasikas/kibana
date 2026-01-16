@@ -19,7 +19,7 @@ import { QueryServiceInternalToken } from '../services/query_service/tokens';
 import { DIRECTOR_QUERY_LOOKBACK_WINDOW } from './constants';
 
 interface DirectorRunParams {
-  from?: Date | null;
+  from?: string | null;
 }
 
 @injectable()
@@ -35,7 +35,8 @@ export class DirectorService {
       message: 'DirectorService: Starting state transition detection',
     });
 
-    const query = getDetectSignalChangeQuery(this.getLookbackWindow(from));
+    const fromDate = from ? new Date(from) : null;
+    const query = getDetectSignalChangeQuery(this.getLookbackWindow(fromDate));
 
     try {
       const queryResponse = await this.queryService.executeQuery({

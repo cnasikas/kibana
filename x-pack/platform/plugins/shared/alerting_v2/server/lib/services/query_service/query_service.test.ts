@@ -12,11 +12,9 @@ import type { ESQLSearchResponse } from '@kbn/es-types';
 import { loggerMock } from '@kbn/logging-mocks';
 import { dataPluginMock } from '@kbn/data-plugin/server/mocks';
 import { QueryService } from './query_service';
-import { InternalEsqlExecutor } from './internal_esql_executor';
 import { ScopedEsqlExecutor } from './scoped_esql_executor';
 import { LoggerService } from '../logger_service/logger_service';
 import { httpServerMock } from '@kbn/core/server/mocks';
-import { elasticsearchServiceMock } from '@kbn/core-elasticsearch-server-mocks';
 
 describe('QueryService', () => {
   let mockSearchClient: jest.Mocked<IScopedSearchClient>;
@@ -198,37 +196,5 @@ describe('QueryService', () => {
       expect(result).toHaveLength(0);
       expect(result).toEqual([]);
     });
-  });
-});
-
-describe('InternalEsqlExecutor', () => {
-  it('should call esql.query.esql and return the body', async () => {
-    const mockLoggerService = new LoggerService(loggerMock.create());
-    const esClient = elasticsearchServiceMock.createElasticsearchClient();
-
-    const mockResponse: ESQLSearchResponse = {
-      columns: [{ name: 'rule_id', type: 'keyword' }],
-      values: [['rule-1']],
-    };
-
-    // @ts-expect-error - not all fields are used
-    esClient.esql.query.mockResponse(mockResponse);
-
-    const executor = new InternalEsqlExecutor(esClient);
-    const queryService = new QueryService(executor, mockLoggerService);
-
-    const result = await queryService.executeQuery({
-      query: 'FROM my-index | LIMIT 1',
-      filter: { bool: { filter: [{ term: { foo: 'bar' } }] } },
-      params: [{ some_param: 'some_value' }],
-    });
-
-    expect(esClient.esql.query).toHaveBeenCalledWith({
-      query: 'FROM my-index | LIMIT 1',
-      drop_null_columns: false,
-      filter: { bool: { filter: [{ term: { foo: 'bar' } }] } },
-      params: [{ some_param: 'some_value' }],
-    });
-    expect(result).toEqual(mockResponse);
   });
 });

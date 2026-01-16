@@ -24,12 +24,13 @@ export class InternalEsqlExecutor implements IEsqlExecutor {
 
   public async execute({
     query,
+    dropNullColumns,
     filter,
     params,
   }: IEsqlExecutorParams): Promise<ESQLSearchResponse> {
     const response = await this.esClient.esql.query({
       query,
-      drop_null_columns: false,
+      drop_null_columns: dropNullColumns,
       filter: filter as QueryDslQueryContainer,
       params: params as FieldValue[],
     });

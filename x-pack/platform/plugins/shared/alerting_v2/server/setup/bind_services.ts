@@ -61,19 +61,8 @@ export function bindServices({ bind }: ContainerModuleLoadOptions) {
     })
     .inRequestScope();
 
-  bind(InternalEsqlExecutor)
-    .toDynamicValue(({ get }) => {
-      const esClient = get(EsServiceInternalToken);
-      return new InternalEsqlExecutor(esClient);
-    })
-    .inSingletonScope();
-
-  bind(ScopedEsqlExecutor)
-    .toDynamicValue(({ get }) => {
-      const searchClient = get(DataServiceScopedToken);
-      return new ScopedEsqlExecutor(searchClient);
-    })
-    .inRequestScope();
+  bind(InternalEsqlExecutor).toSelf().inSingletonScope();
+  bind(ScopedEsqlExecutor).toSelf().inRequestScope();
 
   bind(QueryServiceInternalToken)
     .toDynamicValue(({ get }) => {

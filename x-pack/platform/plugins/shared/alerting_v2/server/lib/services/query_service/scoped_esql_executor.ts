@@ -10,24 +10,28 @@ import { ESQL_SEARCH_STRATEGY, isRunningResponse } from '@kbn/data-plugin/common
 import type { ESQLSearchParams, ESQLSearchResponse } from '@kbn/es-types';
 import type { IKibanaSearchRequest, IKibanaSearchResponse } from '@kbn/search-types';
 import { filter as rxFilter, lastValueFrom, map } from 'rxjs';
+import { inject, injectable } from 'inversify';
 import type { IEsqlExecutor, IEsqlExecutorParams } from './esql_executor';
+import { DataServiceScopedToken } from '../data_service/tokens';
 
 /**
  * Executes ES|QL via Kibana `data.search` (ESQL search strategy).
- * Requires a scoped request-backed search client.
+ * Requires a scoped search client.
  */
+@injectable()
 export class ScopedEsqlExecutor implements IEsqlExecutor {
-  constructor(private readonly searchClient: IScopedSearchClient) {}
+  constructor(@inject(DataServiceScopedToken) private readonly searchClient: IScopedSearchClient) {}
 
   public async execute({
     query,
+    dropNullColumns,
     filter,
     params,
   }: IEsqlExecutorParams): Promise<ESQLSearchResponse> {
     const request: IKibanaSearchRequest<ESQLSearchParams> = {
       params: {
         query,
-        dropNullColumns: false,
+        dropNullColumns,
         filter,
         params,
       },

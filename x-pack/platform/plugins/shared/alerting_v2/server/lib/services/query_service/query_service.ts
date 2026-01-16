@@ -12,6 +12,7 @@ import type { IEsqlExecutor } from './esql_executor';
 
 interface ExecuteQueryParams {
   query: ESQLSearchParams['query'];
+  dropNullColumns?: boolean;
   filter?: ESQLSearchParams['filter'];
   params?: ESQLSearchParams['params'];
 }
@@ -23,14 +24,29 @@ export class QueryService {
     @inject(LoggerService) private readonly logger: LoggerService
   ) {}
 
-  async executeQuery({ query, filter, params }: ExecuteQueryParams): Promise<ESQLSearchResponse> {
+  async executeQuery({
+    query,
+    dropNullColumns = false,
+    filter,
+    params,
+  }: ExecuteQueryParams): Promise<ESQLSearchResponse> {
     try {
       this.logger.debug({
         message: () =>
-          `QueryService: Executing query - ${JSON.stringify({ query, filter, params })}`,
+          `QueryService: Executing query - ${JSON.stringify({
+            query,
+            dropNullColumns,
+            filter,
+            params,
+          })}`,
       });
 
-      const searchResponse = await this.executor.execute({ query, filter, params });
+      const searchResponse = await this.executor.execute({
+        query,
+        dropNullColumns,
+        filter,
+        params,
+      });
 
       this.logger.debug({
         message: `QueryService: Query executed successfully, returned ${searchResponse.values.length} rows`,

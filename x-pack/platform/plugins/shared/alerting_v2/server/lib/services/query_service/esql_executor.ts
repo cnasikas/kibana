@@ -9,6 +9,7 @@ import type { ESQLSearchParams, ESQLSearchResponse } from '@kbn/es-types';
 
 export interface IEsqlExecutorParams {
   query: ESQLSearchParams['query'];
+  dropNullColumns?: ESQLSearchParams['dropNullColumns'];
   filter?: ESQLSearchParams['filter'];
   params?: ESQLSearchParams['params'];
 }
