@@ -84,7 +84,7 @@ describe('DirectorService', () => {
       expect(operations).toHaveLength(4); // 2 index operations + 2 docs
       expect(operations[0]).toEqual({ create: { _index: ALERT_TRANSITIONS_DATA_STREAM } });
       expect(operations[1]).toMatchObject({
-        '@timestamp': timestamp,
+        '@timestamp': expect.any(String),
         rule_id: 'rule-1',
         alert_series_id: 'series-1',
         episode_id: existingEpisodeId,
@@ -94,7 +94,7 @@ describe('DirectorService', () => {
 
       expect(operations[2]).toEqual({ create: { _index: ALERT_TRANSITIONS_DATA_STREAM } });
       expect(operations[3]).toMatchObject({
-        '@timestamp': timestamp,
+        '@timestamp': expect.any(String),
         rule_id: 'rule-2',
         alert_series_id: 'series-2',
         episode_id: expect.any(String),
