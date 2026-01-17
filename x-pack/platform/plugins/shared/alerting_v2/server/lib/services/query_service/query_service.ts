@@ -7,7 +7,7 @@
 
 import type { ESQLSearchParams, ESQLSearchResponse } from '@kbn/es-types';
 import { inject, injectable } from 'inversify';
-import { LoggerService } from '../logger_service/logger_service';
+import { LoggerServiceToken, type LoggerServiceContract } from '../logger_service/logger_service';
 import type { IEsqlExecutor } from './esql_executor';
 
 interface ExecuteQueryParams {
@@ -15,13 +15,19 @@ interface ExecuteQueryParams {
   dropNullColumns?: boolean;
   filter?: ESQLSearchParams['filter'];
   params?: ESQLSearchParams['params'];
+  abortSignal?: AbortSignal;
+}
+
+export interface QueryServiceContract {
+  executeQuery(params: ExecuteQueryParams): Promise<ESQLSearchResponse>;
+  queryResponseToRecords<T extends Record<string, any>>(response: ESQLSearchResponse): T[];
 }
 
 @injectable()
-export class QueryService {
+export class QueryService implements QueryServiceContract {
   constructor(
     private readonly executor: IEsqlExecutor,
-    @inject(LoggerService) private readonly logger: LoggerService
+    @inject(LoggerServiceToken) private readonly logger: LoggerServiceContract
   ) {}
 
   async executeQuery({
@@ -29,6 +35,7 @@ export class QueryService {
     dropNullColumns = false,
     filter,
     params,
+    abortSignal,
   }: ExecuteQueryParams): Promise<ESQLSearchResponse> {
     try {
       this.logger.debug({
@@ -46,6 +53,7 @@ export class QueryService {
         dropNullColumns,
         filter,
         params,
+        abortSignal,
       });
 
       this.logger.debug({

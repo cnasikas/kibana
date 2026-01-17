@@ -12,6 +12,7 @@ export interface IEsqlExecutorParams {
   dropNullColumns?: ESQLSearchParams['dropNullColumns'];
   filter?: ESQLSearchParams['filter'];
   params?: ESQLSearchParams['params'];
+  abortSignal?: AbortSignal;
 }
 
 export interface IEsqlExecutor {

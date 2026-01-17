@@ -27,6 +27,7 @@ export class ScopedEsqlExecutor implements IEsqlExecutor {
     dropNullColumns,
     filter,
     params,
+    abortSignal,
   }: IEsqlExecutorParams): Promise<ESQLSearchResponse> {
     const request: IKibanaSearchRequest<ESQLSearchParams> = {
       params: {
@@ -43,6 +44,7 @@ export class ScopedEsqlExecutor implements IEsqlExecutor {
           request,
           {
             strategy: ESQL_SEARCH_STRATEGY,
+            abortSignal,
           }
         )
         .pipe(

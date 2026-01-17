@@ -27,13 +27,19 @@ export class InternalEsqlExecutor implements IEsqlExecutor {
     dropNullColumns,
     filter,
     params,
+    abortSignal,
   }: IEsqlExecutorParams): Promise<ESQLSearchResponse> {
-    const response = await this.esClient.esql.query({
-      query,
-      drop_null_columns: dropNullColumns,
-      filter: filter as QueryDslQueryContainer,
-      params: params as FieldValue[],
-    });
+    const response = await this.esClient.esql.query(
+      {
+        query,
+        drop_null_columns: dropNullColumns,
+        filter: filter as QueryDslQueryContainer,
+        params: params as FieldValue[],
+      },
+      {
+        signal: abortSignal,
+      }
+    );
 
     return {
       columns: response.columns,

@@ -10,11 +10,16 @@ import { PluginStart } from '@kbn/core-di';
 import { CoreStart, Request } from '@kbn/core-di-server';
 import { RulesClient } from '../lib/rules_client';
 import { ResourceManager } from '../lib/services/resource_service/resource_manager';
-import { LoggerService } from '../lib/services/logger_service/logger_service';
+import { LoggerServiceToken } from '../lib/services/logger_service/logger_service';
 import { QueryService } from '../lib/services/query_service/query_service';
 import { InternalEsqlExecutor } from '../lib/services/query_service/internal_esql_executor';
 import { ScopedEsqlExecutor } from '../lib/services/query_service/scoped_esql_executor';
 import { AlertingRetryService } from '../lib/services/retry_service';
+import { RulesSavedObjectService } from '../lib/services/rules_saved_object_service/rules_saved_object_service';
+import {
+  createTaskRunnerFactory,
+  TaskRunnerFactoryToken,
+} from '../lib/services/task_run_scope_service/create_task_runner';
 import { StorageService } from '../lib/services/storage_service/storage_service';
 import {
   StorageServiceInternalToken,
@@ -35,7 +40,8 @@ export function bindServices({ bind }: ContainerModuleLoadOptions) {
   bind(AlertingRetryService).toSelf().inSingletonScope();
   bind(RetryServiceToken).toService(AlertingRetryService);
 
-  bind(LoggerService).toSelf().inSingletonScope();
+  bind(LoggerServiceToken).toSelf().inSingletonScope();
+  bind(LoggerServiceToken).toService(LoggerServiceToken);
   bind(ResourceManager).toSelf().inSingletonScope();
 
   bind(EsServiceInternalToken)
@@ -53,6 +59,14 @@ export function bindServices({ bind }: ContainerModuleLoadOptions) {
     })
     .inRequestScope();
 
+  bind(TaskRunnerFactoryToken).toFactory((context) =>
+    createTaskRunnerFactory({
+      getInjection: () => context.get(CoreStart('injection')),
+    })
+  );
+
+  bind(RulesSavedObjectService).toSelf().inRequestScope();
+
   bind(DataServiceScopedToken)
     .toDynamicValue(({ get }) => {
       const request = get(Request);
@@ -66,7 +80,7 @@ export function bindServices({ bind }: ContainerModuleLoadOptions) {
 
   bind(QueryServiceInternalToken)
     .toDynamicValue(({ get }) => {
-      const loggerService = get(LoggerService);
+      const loggerService = get(LoggerServiceToken);
       const executor = get(InternalEsqlExecutor);
       return new QueryService(executor, loggerService);
     })
@@ -74,7 +88,7 @@ export function bindServices({ bind }: ContainerModuleLoadOptions) {
 
   bind(QueryServiceScopedToken)
     .toDynamicValue(({ get }) => {
-      const loggerService = get(LoggerService);
+      const loggerService = get(LoggerServiceToken);
       const executor = get(ScopedEsqlExecutor);
       return new QueryService(executor, loggerService);
     })
@@ -82,7 +96,7 @@ export function bindServices({ bind }: ContainerModuleLoadOptions) {
 
   bind(StorageServiceScopedToken)
     .toDynamicValue(({ get }) => {
-      const loggerService = get(LoggerService);
+      const loggerService = get(LoggerServiceToken);
       const esClient = get(EsServiceScopedToken);
       return new StorageService(esClient, loggerService);
     })
@@ -90,7 +104,7 @@ export function bindServices({ bind }: ContainerModuleLoadOptions) {
 
   bind(StorageServiceInternalToken)
     .toDynamicValue(({ get }) => {
-      const loggerService = get(LoggerService);
+      const loggerService = get(LoggerServiceToken);
       const esClient = get(EsServiceInternalToken);
       return new StorageService(esClient, loggerService);
     })
