@@ -13,19 +13,8 @@ import { ALERT_EVENTS_DATA_STREAM } from '../../../resources/datastreams/alert_e
 import { ALERTING_V2_ERROR_CODES } from '../../errors/error_codes';
 import { queryResponseToRecords } from '../../services/query_service/query_response_to_records';
 import type { QueryServiceContract } from '../../services/query_service/query_service';
-import type { AlertEventRecord } from '../types';
+import type { AlertEventRecord, RawAlertEventRow } from '../types';
 import { parseDataJson } from '../utils/parse_data_json';
-
-/**
- * Wire-level shape of a single row coming out of any alert-event ES|QL
- * projection in this client: `data_json` is still the JSON string
- * extracted from `_source.data` at this layer. {@link toAlertEventRecords}
- * parses it on the way out so callers see the canonical
- * {@link AlertEventRecord} shape.
- */
-export type RawAlertEventRow = Omit<AlertEventRecord, 'data_json'> & {
-  data_json?: string | null;
-};
 
 /**
  * Canonicalises an ES|QL response from any of the alert-event projections
@@ -107,6 +96,7 @@ export const loadLatestAlertEvents = async ({
         last_data_json = LAST(data_json, @timestamp),
         last_severity = LAST(severity, @timestamp),
         last_status = LAST(status, @timestamp),
+        last_source = LAST(source, @timestamp),
         last_rule_id = LAST(rule.id, @timestamp),
         last_rule_version = LAST(rule.version, @timestamp)
       BY group_hash, space_id
@@ -117,9 +107,10 @@ export const loadLatestAlertEvents = async ({
         last_data_json AS data_json,
         last_severity AS severity,
         last_status AS status,
+        last_source AS source,
         last_rule_id AS rule_id,
         last_rule_version AS rule_version
-    | KEEP @timestamp, group_hash, episode_id, episode_status, episode_status_count, rule_id, rule_version, space_id, status, data_json, severity
+    | KEEP @timestamp, group_hash, episode_id, episode_status, episode_status_count, rule_id, rule_version, space_id, status, source, data_json, severity
   `.toRequest();
 
   return toAlertEventRecords(await queryService.executeQuery({ query: query.query }));

@@ -24,6 +24,7 @@ export interface AlertEventRecord {
   episode_id: string;
   rule_id: string;
   space_id: string;
+  source: string;
   rule_version?: number;
   data_json: Record<string, unknown>;
   severity?: AlertEventSeverity | null;
@@ -31,3 +32,14 @@ export interface AlertEventRecord {
   status?: AlertEventStatus;
   episode_status_count?: number | null;
 }
+
+/**
+ * Wire-level shape of a single row coming out of any alert-event ES|QL
+ * projection in this client: `data_json` is still the JSON string
+ * extracted from `_source.data` at this layer. {@link toAlertEventRecords}
+ * parses it on the way out so callers see the canonical
+ * {@link AlertEventRecord} shape.
+ */
+export type RawAlertEventRow = Omit<AlertEventRecord, 'data_json'> & {
+  data_json?: string | null;
+};

@@ -30,6 +30,6 @@ export function createStorageService(): {
 export function createMockStorageServiceContract(): jest.Mocked<StorageServiceContract> {
   return {
     bulkIndexDocs: jest.fn().mockResolvedValue(undefined),
-    bulkIndexAcrossIndices: jest.fn().mockResolvedValue(undefined),
+    bulkIndexDocsAcrossIndices: jest.fn().mockResolvedValue(undefined),
   };
 }

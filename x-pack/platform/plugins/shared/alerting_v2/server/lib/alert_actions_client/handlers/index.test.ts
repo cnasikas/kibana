@@ -17,17 +17,18 @@ import type {
 } from '../handler';
 import type { AlertEventRecord } from '../types';
 import {
-  ACTION_HANDLERS,
   type ActionHandlersRegistry,
+  getActionHandlers,
   loadContextPerHandler,
   prepareWithHandler,
 } from '.';
 
 /**
  * The invocation helpers take the registry as a parameter, so tests
- * build their own inline registries instead of mutating the canonical
+ * build their own inline registries instead of touching the canonical
  * one. No `wipeRegistry`, no `afterEach` teardown — the production
- * registry exported from `./index.ts` is never touched here.
+ * registry (retrieved via `getActionHandlers()`) is only read here for
+ * the isolated pin tests below, never mutated or restored.
  */
 
 // Minimal stand-ins — the invocation helpers never inspect these
@@ -92,15 +93,15 @@ const buildTestRegistry = (
   return { ...base, ...overrides };
 };
 
-describe('production handler registry (ACTION_HANDLERS)', () => {
+describe('production handler registry (getActionHandlers)', () => {
   it('has a registered handler for every AlertEpisodeActionType value', () => {
     // The mapped type for `ActionHandlersRegistry` already enforces
     // exhaustiveness at compile time, but the runtime assertion
     // protects against accidental shape regression of the canonical
-    // export and gives a much friendlier failure when somebody adds a
-    // new action_type and forgets to register a handler.
+    // registry and gives a much friendlier failure when somebody adds
+    // a new action_type and forgets to register a handler.
     const declaredActionTypes = Object.values(ALERT_EPISODE_ACTION_TYPE).sort();
-    const registeredActionTypes = Object.keys(ACTION_HANDLERS).sort();
+    const registeredActionTypes = Object.keys(getActionHandlers()).sort();
 
     expect(registeredActionTypes).toEqual(declaredActionTypes);
   });
@@ -127,7 +128,8 @@ describe('production handler registry (ACTION_HANDLERS)', () => {
       // serving six slots. Anyone replacing one slot with a bespoke
       // handler in the future should do so deliberately — this test
       // makes that intent visible.
-      const singletons = AUDIT_ONLY_ACTION_TYPES.map((type) => ACTION_HANDLERS[type]);
+      const handlers = getActionHandlers();
+      const singletons = AUDIT_ONLY_ACTION_TYPES.map((type) => handlers[type]);
       for (const handler of singletons) {
         expect(handler).toBe(singletons[0]);
       }
@@ -135,7 +137,7 @@ describe('production handler registry (ACTION_HANDLERS)', () => {
 
     it('returns only the precomputed audit doc — no synthetic rule event', () => {
       const alertActionDoc = fakeAuditDoc;
-      const prepared = ACTION_HANDLERS[ALERT_EPISODE_ACTION_TYPE.ACK].prepare(makeAckItem(), {
+      const prepared = getActionHandlers()[ALERT_EPISODE_ACTION_TYPE.ACK].prepare(makeAckItem(), {
         alertActionDoc,
         userProfileUid: 'user-1',
         context: undefined,
@@ -147,7 +149,7 @@ describe('production handler registry (ACTION_HANDLERS)', () => {
     it('declares no loadContext — audit-only actions never preload', () => {
       // Every audit-only slot is the same reference, so checking one
       // proves the contract for all six.
-      expect(ACTION_HANDLERS[ALERT_EPISODE_ACTION_TYPE.ACK].loadContext).toBeUndefined();
+      expect(getActionHandlers()[ALERT_EPISODE_ACTION_TYPE.ACK].loadContext).toBeUndefined();
     });
   });
 });

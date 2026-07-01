@@ -10,11 +10,7 @@ import type { BulkCreateAlertActionItemBody } from '@kbn/alerting-v2-schemas';
 import { ALERT_EPISODE_ACTION_TYPE } from '@kbn/alerting-v2-schemas';
 import { createQueryService } from '../../services/query_service/query_service.mock';
 import { ALERTING_V2_ERROR_CODES } from '../../errors/error_codes';
-import {
-  getAlertEventESQLResponse,
-  getBulkAlertEventsESQLResponse,
-  getEmptyESQLResponse,
-} from '../fixtures/query_responses';
+import { getAlertEventESQLResponse, getEmptyESQLResponse } from '../fixtures/query_responses';
 import {
   bulkLoadLatestAlertEvents,
   loadLastAlertEventOrThrow,
@@ -31,17 +27,21 @@ describe('loadLastAlertEventOrThrow', () => {
     it('returns the projected `AlertEventRecord` shape on a non-empty response', async () => {
       const { queryService, mockEsClient } = setup();
       mockEsClient.esql.query.mockResolvedValueOnce(
-        getAlertEventESQLResponse({
-          '@timestamp': '2025-06-01T12:00:00.000Z',
-          group_hash: GROUP_HASH,
-          episode_id: 'episode-42',
-          episode_status: 'recovering',
-          rule_id: 'rule-7',
-          rule_version: 3,
-          space_id: SPACE_ID,
-          data_json: '{"k":"v"}',
-          severity: 'medium',
-        })
+        getAlertEventESQLResponse([
+          {
+            '@timestamp': '2025-06-01T12:00:00.000Z',
+            group_hash: GROUP_HASH,
+            episode_id: 'episode-42',
+            episode_status: 'recovering',
+            episode_status_count: 2,
+            rule_id: 'rule-7',
+            rule_version: 3,
+            space_id: SPACE_ID,
+            status: 'recovered',
+            data_json: '{"k":"v"}',
+            severity: 'medium',
+          },
+        ])
       );
 
       const record = await loadLastAlertEventOrThrow({
@@ -56,9 +56,12 @@ describe('loadLastAlertEventOrThrow', () => {
         group_hash: GROUP_HASH,
         episode_id: 'episode-42',
         episode_status: 'recovering',
+        episode_status_count: 2,
         rule_id: 'rule-7',
         rule_version: 3,
         space_id: SPACE_ID,
+        status: 'recovered',
+        source: 'internal',
         data_json: { k: 'v' },
         severity: 'medium',
       });
@@ -67,7 +70,7 @@ describe('loadLastAlertEventOrThrow', () => {
     it('issues a single ES|QL query against `.rule-events` filtered by space + group + episode', async () => {
       const { queryService, mockEsClient } = setup();
       mockEsClient.esql.query.mockResolvedValueOnce(
-        getAlertEventESQLResponse({ group_hash: GROUP_HASH, episode_id: 'ep-1' })
+        getAlertEventESQLResponse([{ group_hash: GROUP_HASH, episode_id: 'ep-1' }])
       );
 
       await loadLastAlertEventOrThrow({
@@ -98,7 +101,7 @@ describe('loadLastAlertEventOrThrow', () => {
       // in that case.
       const { queryService, mockEsClient } = setup();
       mockEsClient.esql.query.mockResolvedValueOnce(
-        getAlertEventESQLResponse({ group_hash: GROUP_HASH })
+        getAlertEventESQLResponse([{ group_hash: GROUP_HASH }])
       );
 
       await loadLastAlertEventOrThrow({
@@ -217,7 +220,7 @@ describe('loadLatestAlertEvents', () => {
     // so a bulk request hits Elasticsearch once regardless of size.
     const { queryService, mockEsClient } = setup();
     mockEsClient.esql.query.mockResolvedValueOnce(
-      getBulkAlertEventsESQLResponse([
+      getAlertEventESQLResponse([
         { group_hash: 'g-1', episode_id: 'ep-1' },
         { group_hash: 'g-2', episode_id: 'ep-2' },
       ])
@@ -250,7 +253,7 @@ describe('loadLatestAlertEvents', () => {
     // "latest event for any episode of this group" lookup.
     const { queryService, mockEsClient } = setup();
     mockEsClient.esql.query.mockResolvedValueOnce(
-      getBulkAlertEventsESQLResponse([{ group_hash: 'g-no-episode' }])
+      getAlertEventESQLResponse([{ group_hash: 'g-no-episode' }])
     );
 
     await loadLatestAlertEvents({
@@ -270,7 +273,7 @@ describe('loadLatestAlertEvents', () => {
     // a column rename in the ES|QL would surface here first.
     const { queryService, mockEsClient } = setup();
     mockEsClient.esql.query.mockResolvedValueOnce(
-      getBulkAlertEventsESQLResponse([
+      getAlertEventESQLResponse([
         {
           '@timestamp': '2025-06-01T12:00:00.000Z',
           group_hash: 'g-1',
@@ -303,6 +306,7 @@ describe('loadLatestAlertEvents', () => {
       rule_version: 2,
       space_id: SPACE_ID,
       status: 'breached',
+      source: 'internal',
       data_json: { foo: 'bar' },
       severity: 'high',
     });
@@ -311,7 +315,7 @@ describe('loadLatestAlertEvents', () => {
   it('collapses missing/null/malformed `data_json` rows to `{}` on the way out', async () => {
     const { queryService, mockEsClient } = setup();
     mockEsClient.esql.query.mockResolvedValueOnce(
-      getBulkAlertEventsESQLResponse([
+      getAlertEventESQLResponse([
         { group_hash: 'g-missing', episode_id: 'ep-missing' },
         { group_hash: 'g-null', episode_id: 'ep-null', data_json: null },
         { group_hash: 'g-malformed', episode_id: 'ep-malformed', data_json: 'not-json' },
@@ -346,7 +350,7 @@ describe('bulkLoadLatestAlertEvents', () => {
     // a newer episode's row.
     const { queryService, mockEsClient } = setup();
     mockEsClient.esql.query.mockResolvedValueOnce(
-      getBulkAlertEventsESQLResponse([{ group_hash: 'g-ack', episode_id: 'ep-ack' }])
+      getAlertEventESQLResponse([{ group_hash: 'g-ack', episode_id: 'ep-ack' }])
     );
 
     const actions: BulkCreateAlertActionItemBody[] = [
@@ -375,7 +379,7 @@ describe('bulkLoadLatestAlertEvents', () => {
     // for the group.
     const { queryService, mockEsClient } = setup();
     mockEsClient.esql.query.mockResolvedValueOnce(
-      getBulkAlertEventsESQLResponse([{ group_hash: 'g-deactivate' }])
+      getAlertEventESQLResponse([{ group_hash: 'g-deactivate' }])
     );
 
     const actions: BulkCreateAlertActionItemBody[] = [
@@ -403,7 +407,7 @@ describe('bulkLoadLatestAlertEvents', () => {
     // the adapter must not collapse the two shapes onto one rule.
     const { queryService, mockEsClient } = setup();
     mockEsClient.esql.query.mockResolvedValueOnce(
-      getBulkAlertEventsESQLResponse([
+      getAlertEventESQLResponse([
         { group_hash: 'g-ack', episode_id: 'ep-ack' },
         { group_hash: 'g-deactivate' },
       ])

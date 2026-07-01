@@ -11,8 +11,16 @@
  * non-object roots, and missing values all collapse to an empty object so the
  * synthetic `.rule-events` doc builder never receives a non-object value.
  */
-export const parseDataJson = (raw: string | null | undefined): Record<string, unknown> => {
-  if (typeof raw !== 'string' || raw.length === 0) {
+export const parseDataJson = (
+  raw: string | Record<string, unknown> | null | undefined
+): Record<string, unknown> => {
+  if (raw === null || raw === undefined) {
+    return {};
+  }
+  if (typeof raw === 'object') {
+    return Array.isArray(raw) ? {} : raw;
+  }
+  if (raw.length === 0) {
     return {};
   }
   try {

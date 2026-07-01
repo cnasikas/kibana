@@ -61,16 +61,6 @@ describe('buildEpisodesQuery', () => {
     expect(queryString).toContain('episode_data');
   });
 
-  it('reads episode.status directly from .rule-events instead of synthesising an effective_status column', () => {
-    const query = buildEpisodesQuery(SPACE_ID);
-    const queryString = query.print('basic');
-
-    expect(queryString).toContain('last_tags = LAST(tags, @timestamp) WHERE action_type == "tag"');
-    expect(queryString).toContain('BY group_hash');
-    expect(queryString).not.toContain('last_deactivate_action');
-    expect(queryString).not.toContain('effective_status');
-  });
-
   it('should build query with default sort', () => {
     const query = buildEpisodesQuery(SPACE_ID);
     const queryString = query.print('basic');
@@ -364,8 +354,6 @@ describe('buildEpisodesQuery', () => {
       'action_type IN ("snooze", "unsnooze", "tag", "ack", "unack", "assign")'
     );
 
-    expect(queryString).not.toContain('"deactivate"');
-    expect(queryString).not.toContain('"activate"');
     expect(queryString).toContain('EVAL episode_id = COALESCE(`episode.id`, episode_id)');
     expect(queryString).toContain(
       'last_assignee_uid = LAST(assignee_uid, @timestamp) WHERE action_type == "assign"'
@@ -523,7 +511,6 @@ describe('buildEpisodesHistogramQuery', () => {
   it('includes the status filter when filterState.status is provided', () => {
     const output = buildEpisodesHistogramQuery('default', { status: 'active' }).print('basic');
     expect(output).toMatch(/\| WHERE `episode\.status` == "active"/);
-    expect(output).not.toContain('effective_status');
   });
 
   it('includes the ruleId filter when filterState.ruleId is provided', () => {

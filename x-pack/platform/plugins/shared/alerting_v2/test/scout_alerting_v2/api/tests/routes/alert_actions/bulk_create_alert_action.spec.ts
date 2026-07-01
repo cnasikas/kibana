@@ -243,6 +243,7 @@ apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classi
           rule: { id: ruleId, version: 1 },
           group_hash: groupHash,
           status: 'breached',
+          source: 'engine-x',
           type: 'alert',
           episode: { id: episodeId, status: 'active' },
         }),
@@ -271,13 +272,15 @@ apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classi
 
       // The bulk dispatch must produce the synthetic rule-event so the next
       // UI/API read sees the deactivation immediately — without waiting for
-      // the next rule run.
+      // the next rule run. The `source` is propagated from the last
+      // engine-emitted event, not hardcoded, so the synthetic doc stays
+      // consistent with the alert lineage.
       const latestStates = await apiServices.alertingV2.ruleEvents.getLatestEpisodeStates(ruleId);
       expect(latestStates.get(groupHash)).toMatchObject({
         rule: { id: ruleId },
         group_hash: groupHash,
         status: 'recovered',
-        source: 'internal',
+        source: 'engine-x',
         type: 'alert',
         episode: { id: episodeId, status: 'inactive' },
       });
@@ -298,6 +301,7 @@ apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classi
           rule: { id: ruleId, version: 1 },
           group_hash: groupHash,
           status: 'breached',
+          source: 'engine-x',
           type: 'alert',
           episode: { id: episodeId, status: 'active' },
         }),
@@ -306,6 +310,7 @@ apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classi
           rule: { id: ruleId, version: 1 },
           group_hash: groupHash,
           status: 'recovered',
+          source: 'engine-x',
           type: 'alert',
           episode: { id: episodeId, status: 'inactive' },
         }),
@@ -345,7 +350,7 @@ apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classi
         rule: { id: ruleId },
         group_hash: groupHash,
         status: 'breached',
-        source: 'internal',
+        source: 'engine-x',
         type: 'alert',
         episode: { id: episodeId, status: 'active' },
       });

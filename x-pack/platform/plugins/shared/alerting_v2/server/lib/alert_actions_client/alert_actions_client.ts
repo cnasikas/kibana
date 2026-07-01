@@ -34,7 +34,7 @@ import {
 } from './context_loaders/load_latest_alert_events';
 import type { AlertEventRecord } from './types';
 import type { HandlerItem, PreparedAction } from './handler';
-import { ACTION_HANDLERS, loadContextPerHandler, prepareWithHandler } from './handlers';
+import { getActionHandlers, loadContextPerHandler, prepareWithHandler } from './handlers';
 
 type ResolvedItem = HandlerItem<CreateAlertActionBody>;
 type ContextByActionType = Partial<Record<AlertEpisodeActionType, unknown>>;
@@ -101,13 +101,13 @@ export class AlertActionsClient {
     return prepareWithHandler(
       { action, alertEvent },
       { alertActionDoc, userProfileUid, context: contextByType[action.action_type] },
-      ACTION_HANDLERS
+      getActionHandlers()
     );
   }
 
   /**
    * Persists a batch of prepared actions in a single ES `_bulk` round-trip.
-   * `bulkIndexAcrossIndices` is used uniformly so audit-only batches and
+   * `bulkIndexDocsAcrossIndices` is used uniformly so audit-only batches and
    * mixed audit + synthetic `.rule-events` batches share one code path. The
    * `wait_for` refresh ensures the next API/UI read sees the new state.
    */
@@ -125,7 +125,7 @@ export class AlertActionsClient {
         : [{ index: ALERT_ACTIONS_DATA_STREAM, doc: alertActionDoc }]
     );
 
-    await this.storageService.bulkIndexAcrossIndices({
+    await this.storageService.bulkIndexDocsAcrossIndices({
       docs,
       refresh: 'wait_for',
     });
@@ -136,22 +136,24 @@ export class AlertActionsClient {
    * per-item context, grouping items by `action_type` so each handler
    * sees only the inputs it cares about. The result is a sparse map
    * keyed by `action_type` and consumed by {@link prepareAction} via
-   * `contextByType[action.action_type]` — the orchestrator never names
-   * an individual handler directly.
+   * `contextByType[action.action_type]`.
    *
    * Handlers without a `loadContext` (the audit-only ones, plus
    * `deactivate`) get an `undefined` entry, which `prepareWithHandler`
    * forwards through as `ctx.context: undefined`.
    */
   private async loadHandlerContexts(items: readonly ResolvedItem[]): Promise<ContextByActionType> {
-    const itemsByType = groupItemsByActionType(items);
+    const itemsByType = groupBy(items, (item) => item.action.action_type) as Partial<
+      Record<AlertEpisodeActionType, ResolvedItem[]>
+    >;
+
     return loadContextPerHandler(
       itemsByType,
       {
         queryService: this.queryService,
         spaceId: this.spaceId,
       },
-      ACTION_HANDLERS
+      getActionHandlers()
     );
   }
 
@@ -175,13 +177,13 @@ export class AlertActionsClient {
    * single batch of domain events. Bulk requests that contain only audit
    * actions (e.g. `ack` / `tag` / `snooze`) keep the previous one-call
    * behaviour; bulk requests with mixed lifecycle + audit items still
-   * write everything in one round-trip thanks to `bulkIndexAcrossIndices`.
+   * write everything in one round-trip thanks to `bulkIndexDocsAcrossIndices`.
    */
   public async createBulkActions(
     actions: BulkCreateAlertActionItemBody[]
   ): Promise<{ processed: number; total: number }> {
     // Stage 1: resolve the user identity + the latest alert event per group
-    // referenced in the batch. Two ES|QL queries, in parallel, regardless of
+    // referenced in the batch. Two queries, in parallel, regardless of
     // batch size.
     const [userProfileUid, latestEvents] = await Promise.all([
       this.userService.getCurrentUserProfileUid(),
@@ -192,21 +194,24 @@ export class AlertActionsClient {
       }),
     ]);
 
-    const recordsByGroupHash = groupBy(latestEvents, 'group_hash');
-    const resolvedAlertEvents = this.resolveAlertEventsForActions(actions, recordsByGroupHash);
+    const latestEventsByGroupHash = groupBy(latestEvents, (event) => event.group_hash);
+    const actionsWithLatestAlertEvents = this.pairActionsWithLatestEvents(
+      actions,
+      latestEventsByGroupHash
+    );
 
     // Stage 2: registry-driven preload. Each handler's `loadContext`
     // (if defined) sees only the items routed to it; handlers without
     // a preload contribute no I/O. Pure audit-only batches issue zero
     // extra round-trips.
-    const contextByType = await this.loadHandlerContexts(resolvedAlertEvents);
+    const contextByType = await this.loadHandlerContexts(actionsWithLatestAlertEvents);
 
     // Stage 3: synchronous per-action prep. The `try/catch` here is
     // the *only* place per-item precondition errors are tolerated —
     // Boom 400 / 404 become silent skips (preserving the bulk UX),
     // anything else propagates and fails the whole batch loudly.
     const prepared: PreparedAction[] = [];
-    for (const { action, alertEvent } of resolvedAlertEvents) {
+    for (const { action, alertEvent } of actionsWithLatestAlertEvents) {
       try {
         prepared.push(this.prepareAction({ action, alertEvent, userProfileUid, contextByType }));
       } catch (error) {
@@ -239,28 +244,35 @@ export class AlertActionsClient {
    * is not the group's latest episode, are silently dropped — same skip
    * semantics the bulk path has always had for `ack` / `tag` / etc.
    */
-  private resolveAlertEventsForActions(
+  private pairActionsWithLatestEvents(
     actions: readonly BulkCreateAlertActionItemBody[],
-    recordsByGroupHash: Record<string, AlertEventRecord[]>
+    latestEventsByGroupHash: Record<string, AlertEventRecord[]>
   ): Array<{ action: BulkCreateAlertActionItemBody; alertEvent: AlertEventRecord }> {
     const resolved: Array<{
       action: BulkCreateAlertActionItemBody;
       alertEvent: AlertEventRecord;
     }> = [];
     for (const action of actions) {
-      const groupRecords = recordsByGroupHash[action.group_hash];
-      if (!groupRecords || groupRecords.length === 0) {
-        continue;
-      }
-      const alertEvent =
-        'episode_id' in action
-          ? groupRecords.find((record) => record.episode_id === action.episode_id)
-          : groupRecords[0];
+      // The loader groups `STATS … BY group_hash, space_id`, so each
+      // bucket is length-≤1: at most one "latest" row per group.
+      const [alertEvent] = latestEventsByGroupHash[action.group_hash] ?? [];
+
       if (!alertEvent) {
         continue;
       }
+
+      // Supersession guard: an item that narrowed to a specific
+      // `episode_id` must not be paired with a newer episode of the same
+      // group. This mirrors the activate handler's precondition ("cannot
+      // act on an episode that has been superseded"), applied silently
+      // for the bulk path.
+      if ('episode_id' in action && alertEvent.episode_id !== action.episode_id) {
+        continue;
+      }
+
       resolved.push({ action, alertEvent });
     }
+
     return resolved;
   }
 
@@ -285,21 +297,3 @@ export class AlertActionsClient {
     };
   }
 }
-
-/**
- * Buckets resolved items by `action_type` into the exact shape
- * `loadContextPerHandler` expects: a sparse record from `action_type` to
- * the list of items routed to that handler. Empty buckets are simply
- * absent — handlers without items in this batch are not invoked.
- */
-const groupItemsByActionType = (
-  items: readonly ResolvedItem[]
-): Partial<Record<AlertEpisodeActionType, ResolvedItem[]>> => {
-  const result: Partial<Record<AlertEpisodeActionType, ResolvedItem[]>> = {};
-  for (const item of items) {
-    const bucket = result[item.action.action_type] ?? [];
-    bucket.push(item);
-    result[item.action.action_type] = bucket;
-  }
-  return result;
-};

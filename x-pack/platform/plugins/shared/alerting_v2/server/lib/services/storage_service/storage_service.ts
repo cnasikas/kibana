@@ -20,7 +20,7 @@ export interface BulkIndexDocsParams<TDocument extends Record<string, unknown>> 
 }
 
 /**
- * Parameters for {@link StorageServiceContract.bulkIndexAcrossIndices}.
+ * Parameters for {@link StorageServiceContract.bulkIndexDocsAcrossIndices}.
  *
  * The doc element is intentionally typed as `Record<string, unknown>` rather
  * than a generic: this method is for heterogeneous batches (different shapes
@@ -28,7 +28,7 @@ export interface BulkIndexDocsParams<TDocument extends Record<string, unknown>> 
  * callers to spell out the union or breaks inference. Each caller composes
  * the batch from its own typed inputs and the runtime is shape-agnostic.
  */
-export interface BulkIndexAcrossIndicesParams {
+export interface BulkIndexDocsAcrossIndicesParams {
   docs: ReadonlyArray<{ index: string; doc: Record<string, unknown> }>;
   /** When `'wait_for'`, the bulk call blocks until the indexed documents are visible to search. Defaults to `false`. */
   refresh?: boolean | 'wait_for';
@@ -47,7 +47,7 @@ export interface StorageServiceContract {
    * streams (e.g. writing a rule event and an audit action in one round-trip).
    * Operations are submitted in array order.
    */
-  bulkIndexAcrossIndices(params: BulkIndexAcrossIndicesParams): Promise<void>;
+  bulkIndexDocsAcrossIndices(params: BulkIndexDocsAcrossIndicesParams): Promise<void>;
 }
 
 @injectable()
@@ -64,7 +64,7 @@ export class StorageService implements StorageServiceContract {
     await this.writeBulk(entries, params.refresh ?? false);
   }
 
-  public async bulkIndexAcrossIndices(params: BulkIndexAcrossIndicesParams): Promise<void> {
+  public async bulkIndexDocsAcrossIndices(params: BulkIndexDocsAcrossIndicesParams): Promise<void> {
     await this.writeBulk(params.docs, params.refresh ?? false);
   }
 

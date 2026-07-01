@@ -30,13 +30,7 @@ export interface PreparedAction {
 
 /**
  * One unit of work for a handler: the user-supplied `action` body plus
- * the alert event the orchestrator resolved (and silently skipped
- * pairing for, when applicable).
- *
- * `TBody` is the **clean** discriminated-union variant — NOT the bulk
- * intersection `BulkCreateAlertActionItemBody`. Bulk items are
- * structurally assignable to this shape, so the orchestrator can hand
- * them through without any narrowing.
+ * the alert event the orchestrator resolved.
  */
 export interface HandlerItem<TBody extends CreateAlertActionBody> {
   action: TBody;

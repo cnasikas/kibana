@@ -7,40 +7,16 @@
 
 import { expect } from '@kbn/scout/api';
 import type { RoleApiCredentials } from '@kbn/scout';
-import type { AlertAction } from '../../../../../../server/resources/datastreams/alert_actions';
 import {
   ALERTING_V2_ALERTS_ALL_ROLE,
   ALERTING_V2_ALERTS_READ_ROLE,
   apiTest,
+  buildAlertAction,
   buildAlertEvent,
   getActivateAlertActionUrl,
   NO_ACCESS_ROLE,
   testData,
 } from '../../../fixtures';
-
-/**
- * Builds an `.alert-actions` audit document with the minimum required fields,
- * timestamped relative to a base instant so seeded sequences (e.g. snooze →
- * deactivate) preserve their causal order during ESQL `SORT @timestamp DESC`.
- */
-const buildAuditAction = (input: {
-  ruleId: string;
-  groupHash: string;
-  episodeId: string;
-  actionType: AlertAction['action_type'];
-  reason?: string;
-  timestamp: string;
-}): AlertAction => ({
-  '@timestamp': input.timestamp,
-  actor: 'elastic',
-  action_type: input.actionType,
-  last_series_event_timestamp: input.timestamp,
-  rule_id: input.ruleId,
-  group_hash: input.groupHash,
-  episode_id: input.episodeId,
-  space_id: 'default',
-  ...(input.reason ? { reason: input.reason } : {}),
-});
 
 /** Returns ISO timestamps separated by `stepMs`, ordered earliest first. */
 const buildTimestampSequence = (stepMs: number, count: number): string[] => {
@@ -95,12 +71,12 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         }),
       ]);
       await apiServices.alertingV2.alertActions.seed([
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'deactivate',
-          timestamp: deactivateTs,
+        buildAlertAction({
+          '@timestamp': deactivateTs,
+          action_type: 'deactivate',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: episodeId,
         }),
       ]);
 
@@ -156,12 +132,12 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         }),
       ]);
       await apiServices.alertingV2.alertActions.seed([
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'deactivate',
-          timestamp: deactivateTs,
+        buildAlertAction({
+          '@timestamp': deactivateTs,
+          action_type: 'deactivate',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: episodeId,
         }),
       ]);
 
@@ -234,12 +210,12 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         }),
       ]);
       await apiServices.alertingV2.alertActions.seed([
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'deactivate',
-          timestamp: deactivateTs,
+        buildAlertAction({
+          '@timestamp': deactivateTs,
+          action_type: 'deactivate',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: episodeId,
         }),
       ]);
 
@@ -380,12 +356,12 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         }),
       ]);
       await apiServices.alertingV2.alertActions.seed([
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId: oldEpisodeId,
-          actionType: 'deactivate',
-          timestamp: deactivateTs,
+        buildAlertAction({
+          '@timestamp': deactivateTs,
+          action_type: 'deactivate',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: oldEpisodeId,
         }),
       ]);
 
@@ -443,19 +419,19 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         }),
       ]);
       await apiServices.alertingV2.alertActions.seed([
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'deactivate',
-          timestamp: deactivateTs,
+        buildAlertAction({
+          '@timestamp': deactivateTs,
+          action_type: 'deactivate',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: episodeId,
         }),
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'activate',
-          timestamp: activateTs,
+        buildAlertAction({
+          '@timestamp': activateTs,
+          action_type: 'activate',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: episodeId,
         }),
       ]);
 
@@ -498,20 +474,20 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         }),
       ]);
       await apiServices.alertingV2.alertActions.seed([
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'deactivate',
-          timestamp: deactivateTs,
+        buildAlertAction({
+          '@timestamp': deactivateTs,
+          action_type: 'deactivate',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: episodeId,
         }),
         // User tags the deactivated episode — orthogonal to lifecycle.
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'tag',
-          timestamp: tagTs,
+        buildAlertAction({
+          '@timestamp': tagTs,
+          action_type: 'tag',
+          rule_id: ruleId,
+          group_hash: groupHash,
+          episode_id: episodeId,
         }),
       ]);
 

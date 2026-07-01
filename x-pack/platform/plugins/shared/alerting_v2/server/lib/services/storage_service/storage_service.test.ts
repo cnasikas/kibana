@@ -161,7 +161,7 @@ describe('StorageService', () => {
     });
   });
 
-  describe('bulkIndexAcrossIndices', () => {
+  describe('bulkIndexDocsAcrossIndices', () => {
     const mockDocs = [
       {
         '@timestamp': '2024-01-01T00:00:00Z',
@@ -184,7 +184,7 @@ describe('StorageService', () => {
       // @ts-expect-error - not all fields are used
       mockEsClient.bulk.mockResolvedValue(mockBulkResponse);
 
-      await storageService.bulkIndexAcrossIndices({
+      await storageService.bulkIndexDocsAcrossIndices({
         docs: [
           { index: '.rule-events', doc: mockDocs[0] },
           { index: '.alert-actions', doc: mockDocs[1] },
@@ -213,7 +213,7 @@ describe('StorageService', () => {
       // @ts-expect-error - not all fields are used
       mockEsClient.bulk.mockResolvedValue(mockBulkResponse);
 
-      await storageService.bulkIndexAcrossIndices({
+      await storageService.bulkIndexDocsAcrossIndices({
         docs: [{ index: '.rule-events', doc: mockDocs[0] }],
       });
 
@@ -224,7 +224,7 @@ describe('StorageService', () => {
     });
 
     it('returns early when the docs array is empty', async () => {
-      await storageService.bulkIndexAcrossIndices({ docs: [] });
+      await storageService.bulkIndexDocsAcrossIndices({ docs: [] });
 
       expect(mockEsClient.bulk).not.toHaveBeenCalled();
     });
@@ -234,7 +234,7 @@ describe('StorageService', () => {
       mockEsClient.bulk.mockRejectedValue(error);
 
       await expect(
-        storageService.bulkIndexAcrossIndices({
+        storageService.bulkIndexDocsAcrossIndices({
           docs: [{ index: '.rule-events', doc: mockDocs[0] }],
         })
       ).rejects.toThrow('Elasticsearch connection failed');

@@ -41,35 +41,21 @@ export type ActionHandlersRegistry = {
  * one of those slots at this single shared singleton instead of paying
  * for a per-action file.
  *
- * The singleton is typed against the widest action body
- * (`CreateAlertActionBody`). The *sound* reason this assigns into
- * every narrower slot is contravariance: `ActionHandler` uses `TBody`
- * only in input positions of `prepare` / `loadContext`, so a
- * wide-input handler is structurally a supertype of every narrow-input
- * one. The compiler doesn't actually need that argument here —
- * `prepare` and `loadContext` are method-shorthand declarations, which
- * TS checks bivariantly even under `--strictFunctionTypes` (a strictly
- * more permissive rule). Contravariance is what keeps the design
- * sound; bivariance is just what makes the assignments compile
- * without any per-slot factory, allowlist, or cast.
  */
 const auditOnlyHandler: ActionHandler<CreateAlertActionBody, unknown> = {
   prepare: (_item, { alertActionDoc }) => ({ alertActionDoc }),
 };
 
 /**
- * Canonical handler registry. Exported as a `Readonly` view so callers
- * cannot rebind individual slots; the production orchestrator passes
- * this into the invocation helpers below, and tests pass their own
- * inline registries instead of mutating the canonical one — the
- * helpers take the registry as a parameter on purpose so the two never
- * share state.
+ * Canonical handler registry. Kept **module-private** so no consumer
+ * can hold a live reference to (and therefore accidentally mutate) the
+ * shared map. Access it via {@link getActionHandlers} instead.
  *
  * Typed as the **exhaustive** {@link ActionHandlersRegistry}: adding a
  * new `AlertEpisodeActionType` value without a matching slot is a TS
  * compile error at this declaration.
  */
-export const ACTION_HANDLERS: Readonly<ActionHandlersRegistry> = {
+const ACTION_HANDLERS: Readonly<ActionHandlersRegistry> = {
   [ALERT_EPISODE_ACTION_TYPE.ACK]: auditOnlyHandler,
   [ALERT_EPISODE_ACTION_TYPE.UNACK]: auditOnlyHandler,
   [ALERT_EPISODE_ACTION_TYPE.ASSIGN]: auditOnlyHandler,
@@ -79,6 +65,8 @@ export const ACTION_HANDLERS: Readonly<ActionHandlersRegistry> = {
   [ALERT_EPISODE_ACTION_TYPE.DEACTIVATE]: deactivateHandler,
   [ALERT_EPISODE_ACTION_TYPE.ACTIVATE]: activateHandler,
 };
+
+export const getActionHandlers = (): Readonly<ActionHandlersRegistry> => ACTION_HANDLERS;
 
 /**
  * Calls the handler that `handlers` registers for
@@ -106,12 +94,6 @@ export const prepareWithHandler = (
  * Returns a sparse map of `action_type` -> opaque context, consumed
  * only via {@link prepareWithHandler}.
  *
- * Handlers without a `loadContext` produce an `undefined` entry —
- * that's the canonical "this handler has no preload" signal the
- * orchestrator hands through to `prepare` as `ctx.context`. The helper
- * is unaware of whether it's serving a single-action route or a bulk
- * batch; both paths go through here so each handler has exactly one
- * place to define its preload.
  */
 export const loadContextPerHandler = async (
   itemsByType: Partial<Record<AlertEpisodeActionType, Array<HandlerItem<CreateAlertActionBody>>>>,

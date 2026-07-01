@@ -7,7 +7,6 @@
 
 import Boom from '@hapi/boom';
 import { ALERT_EPISODE_ACTION_TYPE } from '@kbn/alerting-v2-schemas';
-import type { AlertAction } from '../../../resources/datastreams/alert_actions';
 import {
   alertEpisodeStatus,
   alertEventStatus,
@@ -17,10 +16,11 @@ import {
 import { ALERTING_V2_ERROR_CODES } from '../../errors/error_codes';
 import { createQueryService } from '../../services/query_service/query_service.mock';
 import {
+  getAlertEventESQLResponse,
   getLastEpisodeLifecycleActionsESQLResponse,
-  getPreDeactivateAlertEventESQLResponse,
 } from '../fixtures/query_responses';
-import type { HandlerItem, HandlerPrepareContext, HandlerServices } from '../handler';
+import type { HandlerPrepareContext, HandlerServices } from '../handler';
+import { buildAlertEventRecord, buildHandlerItem, buildHandlerPrepareContext } from '../test_utils';
 import type { AlertEventRecord } from '../types';
 import { activateHandler } from './activate';
 
@@ -39,53 +39,37 @@ afterAll(() => {
   jest.useRealTimers();
 });
 
-const buildAlertEvent = (overrides: Partial<AlertEventRecord> = {}): AlertEventRecord => ({
-  '@timestamp': '2026-06-28T18:55:00.000Z',
-  group_hash: 'group-1',
-  episode_id: 'episode-1',
-  rule_id: 'rule-1',
-  rule_version: 2,
-  space_id: 'default',
-  data_json: { hostname: 'h1' },
-  severity: 'medium',
-  episode_status: alertEpisodeStatus.inactive,
-  ...overrides,
-});
+const buildAlertEvent = (overrides: Partial<AlertEventRecord> = {}): AlertEventRecord =>
+  buildAlertEventRecord({
+    severity: 'medium',
+    episode_status: alertEpisodeStatus.inactive,
+    ...overrides,
+  });
 
-const buildPreDeactivateEvent = (overrides: Partial<AlertEventRecord> = {}): AlertEventRecord => ({
-  '@timestamp': '2026-06-28T18:50:00.000Z',
-  group_hash: 'group-1',
-  episode_id: 'episode-1',
-  rule_id: 'rule-1',
-  rule_version: 3,
-  space_id: 'default',
-  data_json: { hostname: 'h-pre' },
-  severity: 'high',
-  episode_status: alertEpisodeStatus.active,
-  episode_status_count: 5,
-  status: alertEventStatus.breached,
-  ...overrides,
-});
+// The pre-deactivate event is the last engine-emitted state before the
+// user's deactivate — earlier `@timestamp`, a higher `rule_version`,
+// a distinctive `data_json`, and (importantly) a non-null
+// `episode_status_count` since the activate handler forwards it to the
+// synthetic doc.
+const buildPreDeactivateEvent = (overrides: Partial<AlertEventRecord> = {}): AlertEventRecord =>
+  buildAlertEventRecord({
+    '@timestamp': '2026-06-28T18:50:00.000Z',
+    rule_version: 3,
+    data_json: { hostname: 'h-pre' },
+    episode_status_count: 5,
+    ...overrides,
+  });
 
-const buildItem = (
-  alertEvent: AlertEventRecord = buildAlertEvent()
-): HandlerItem<{
-  action_type: typeof ALERT_EPISODE_ACTION_TYPE.ACTIVATE;
-  reason: string;
-}> => ({
-  action: { action_type: ALERT_EPISODE_ACTION_TYPE.ACTIVATE, reason: 'reopen for follow-up' },
-  alertEvent,
-});
+const buildItem = (alertEvent: AlertEventRecord = buildAlertEvent()) =>
+  buildHandlerItem(
+    { action_type: ALERT_EPISODE_ACTION_TYPE.ACTIVATE, reason: 'reopen for follow-up' } as const,
+    alertEvent
+  );
 
 const buildCtx = (
   context: Map<string, ActivateContextEntry>,
   overrides: Partial<HandlerPrepareContext<Map<string, ActivateContextEntry>>> = {}
-): HandlerPrepareContext<Map<string, ActivateContextEntry>> => ({
-  alertActionDoc: { sentinel: 'audit-doc' } as unknown as AlertAction,
-  userProfileUid: 'profile-1',
-  context,
-  ...overrides,
-});
+) => buildHandlerPrepareContext(context, overrides);
 
 const buildContextEntry = (
   overrides: Partial<ActivateContextEntry> = {}
@@ -121,6 +105,7 @@ describe('activateHandler', () => {
         group_hash: 'group-pre',
         episode_id: 'episode-1',
         space_id: 'space-pre',
+        source: 'engine-x',
         data_json: { rebuilt: true },
         severity: 'critical',
         episode_status: alertEpisodeStatus.recovering,
@@ -137,7 +122,7 @@ describe('activateHandler', () => {
         group_hash: 'group-pre',
         data: { rebuilt: true },
         status: alertEventStatus.breached,
-        source: 'internal',
+        source: 'engine-x',
         type: alertEventType.alert,
         space_id: 'space-pre',
         episode: {
@@ -307,9 +292,7 @@ describe('activateHandler', () => {
           ])
         )
         .mockResolvedValueOnce(
-          getPreDeactivateAlertEventESQLResponse([
-            { episode_id: 'episode-1', episode_status: 'active' },
-          ])
+          getAlertEventESQLResponse([{ episode_id: 'episode-1', episode_status: 'active' }])
         );
 
       const result = await activateHandler.loadContext!([buildItem()], services);
@@ -331,7 +314,7 @@ describe('activateHandler', () => {
 
       mockEsClient.esql.query
         .mockResolvedValueOnce(getLastEpisodeLifecycleActionsESQLResponse([]))
-        .mockResolvedValueOnce(getPreDeactivateAlertEventESQLResponse([]));
+        .mockResolvedValueOnce(getAlertEventESQLResponse([]));
 
       const result = await activateHandler.loadContext!([buildItem()], services);
 
@@ -346,7 +329,7 @@ describe('activateHandler', () => {
 
       mockEsClient.esql.query
         .mockResolvedValueOnce(getLastEpisodeLifecycleActionsESQLResponse([]))
-        .mockResolvedValueOnce(getPreDeactivateAlertEventESQLResponse([]));
+        .mockResolvedValueOnce(getAlertEventESQLResponse([]));
 
       const itemA = buildItem(buildAlertEvent({ episode_id: 'episode-1' }));
       const itemB = buildItem(buildAlertEvent({ episode_id: 'episode-1' }));

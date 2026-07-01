@@ -85,7 +85,7 @@ export const deactivateHandler: ActionHandler<DeactivateAlertActionBody, unknown
       group_hash: alertEvent.group_hash,
       data: alertEvent.data_json,
       status: alertEventStatus.recovered,
-      source: 'internal',
+      source: alertEvent.source,
       type: alertEventType.alert,
       space_id: alertEvent.space_id,
       episode: { id: alertEvent.episode_id, status: alertEpisodeStatus.inactive },

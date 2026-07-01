@@ -59,5 +59,11 @@ describe('parseDataJson', () => {
         missing: null,
       });
     });
+
+    it('returns the object intact (same reference) when handed one directly', () => {
+      const input = { outer: { inner: [1, 2] }, flag: false, missing: null };
+
+      expect(parseDataJson(input)).toBe(input);
+    });
   });
 });

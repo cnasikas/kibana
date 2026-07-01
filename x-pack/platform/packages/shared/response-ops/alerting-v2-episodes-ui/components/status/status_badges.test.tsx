@@ -105,18 +105,17 @@ describe('AlertEpisodeStatusBadges', () => {
   });
 
   it.each([
-    ALERT_EPISODE_STATUS.ACTIVE,
-    ALERT_EPISODE_STATUS.INACTIVE,
-    ALERT_EPISODE_STATUS.RECOVERING,
-    ALERT_EPISODE_STATUS.PENDING,
-  ] as const)('renders the %s status as-is from the `status` prop', (status) => {
+    [ALERT_EPISODE_STATUS.ACTIVE, 'Active'],
+    [ALERT_EPISODE_STATUS.INACTIVE, 'Inactive'],
+    [ALERT_EPISODE_STATUS.RECOVERING, 'Recovering'],
+    [ALERT_EPISODE_STATUS.PENDING, 'Pending'],
+  ] as const)('renders the %s status as-is from the `status` prop', (status, expectedLabel) => {
     renderWithI18n(
       <AlertEpisodeStatusBadges
         status={status}
         groupAction={{ lastSnoozeAction: null, snoozeExpiry: null }}
       />
     );
-    const expectedLabel = status.charAt(0).toUpperCase() + status.slice(1);
     expect(screen.getByText(expectedLabel)).toBeInTheDocument();
   });
 });
