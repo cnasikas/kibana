@@ -11,7 +11,6 @@ import { Request } from '@kbn/core-di-server';
 import { inject, injectable } from 'inversify';
 import { groupBy, omit } from 'lodash';
 import {
-  type AlertEpisodeActionType,
   type BulkCreateAlertActionItemBody,
   type CreateAlertActionBody,
 } from '@kbn/alerting-v2-schemas';
@@ -33,11 +32,8 @@ import {
   loadLastAlertEventOrThrow,
 } from './context_loaders/load_latest_alert_events';
 import type { AlertEventRecord } from './types';
-import type { HandlerItem, PreparedAction } from './handler';
-import { getActionHandlers, loadContextPerHandler, prepareWithHandler } from './handlers';
-
-type ResolvedItem = HandlerItem<CreateAlertActionBody>;
-type ContextByActionType = Partial<Record<AlertEpisodeActionType, unknown>>;
+import type { PreparedAction } from './handler';
+import { getActionHandlers, prepareWithHandler } from './handlers';
 
 @injectable()
 export class AlertActionsClient {
@@ -67,8 +63,7 @@ export class AlertActionsClient {
       }),
     ]);
 
-    const contextByType = await this.loadHandlerContexts([{ action, alertEvent }]);
-    const prepared = this.prepareAction({ action, alertEvent, userProfileUid, contextByType });
+    const prepared = this.prepareAction({ action, alertEvent, userProfileUid });
 
     await this.persistPreparedActions([prepared]);
     this.eventPublisher.emitEpisodeActions(this.request, [prepared.alertActionDoc]);
@@ -86,23 +81,17 @@ export class AlertActionsClient {
    * {@link AlertActionsClient.createBulkActions} (which converts
    * expected Boom 400 / 404 rejections into silent skips so the rest of
    * the batch still gets persisted). All I/O the prep would have needed
-   * has already happened by the time this is called — including any
-   * handler's `loadContext` preload, surfaced through `contextByType`.
+   * has already happened by the time this is called.
    */
   private prepareAction(params: {
     action: CreateAlertActionBody;
     alertEvent: AlertEventRecord;
     userProfileUid: string | null;
-    contextByType: ContextByActionType;
   }): PreparedAction {
-    const { action, alertEvent, userProfileUid, contextByType } = params;
+    const { action, alertEvent, userProfileUid } = params;
     const alertActionDoc = this.buildAlertActionDocument({ action, alertEvent, userProfileUid });
 
-    return prepareWithHandler(
-      { action, alertEvent },
-      { alertActionDoc, userProfileUid, context: contextByType[action.action_type] },
-      getActionHandlers()
-    );
+    return prepareWithHandler({ action, alertEvent }, { alertActionDoc }, getActionHandlers());
   }
 
   /**
@@ -129,32 +118,6 @@ export class AlertActionsClient {
       docs,
       refresh: 'wait_for',
     });
-  }
-
-  /**
-   * Asks every handler that has a `loadContext` to preload its
-   * per-item context, grouping items by `action_type` so each handler
-   * sees only the inputs it cares about. The result is a sparse map
-   * keyed by `action_type` and consumed by {@link prepareAction} via
-   * `contextByType[action.action_type]`.
-   *
-   * Handlers without a `loadContext` (the audit-only ones, plus
-   * `deactivate`) get an `undefined` entry, which `prepareWithHandler`
-   * forwards through as `ctx.context: undefined`.
-   */
-  private async loadHandlerContexts(items: readonly ResolvedItem[]): Promise<ContextByActionType> {
-    const itemsByType = groupBy(items, (item) => item.action.action_type) as Partial<
-      Record<AlertEpisodeActionType, ResolvedItem[]>
-    >;
-
-    return loadContextPerHandler(
-      itemsByType,
-      {
-        queryService: this.queryService,
-        spaceId: this.spaceId,
-      },
-      getActionHandlers()
-    );
   }
 
   /**
@@ -200,20 +163,14 @@ export class AlertActionsClient {
       latestEventsByGroupHash
     );
 
-    // Stage 2: registry-driven preload. Each handler's `loadContext`
-    // (if defined) sees only the items routed to it; handlers without
-    // a preload contribute no I/O. Pure audit-only batches issue zero
-    // extra round-trips.
-    const contextByType = await this.loadHandlerContexts(actionsWithLatestAlertEvents);
-
-    // Stage 3: synchronous per-action prep. The `try/catch` here is
+    // Stage 2: synchronous per-action prep. The `try/catch` here is
     // the *only* place per-item precondition errors are tolerated —
     // Boom 400 / 404 become silent skips (preserving the bulk UX),
     // anything else propagates and fails the whole batch loudly.
     const prepared: PreparedAction[] = [];
     for (const { action, alertEvent } of actionsWithLatestAlertEvents) {
       try {
-        prepared.push(this.prepareAction({ action, alertEvent, userProfileUid, contextByType }));
+        prepared.push(this.prepareAction({ action, alertEvent, userProfileUid }));
       } catch (error) {
         if (
           Boom.isBoom(error) &&

@@ -7,31 +7,19 @@
 
 import { ALERT_EPISODE_ACTION_TYPE, type CreateAlertActionBody } from '@kbn/alerting-v2-schemas';
 import type { AlertAction } from '../../../resources/datastreams/alert_actions';
-import { createQueryService } from '../../services/query_service/query_service.mock';
-import type {
-  ActionHandler,
-  HandlerItem,
-  HandlerPrepareContext,
-  HandlerServices,
-  PreparedAction,
-} from '../handler';
+import type { ActionHandler, HandlerItem, HandlerPrepareContext, PreparedAction } from '../handler';
 import type { AlertEventRecord } from '../types';
-import {
-  type ActionHandlersRegistry,
-  getActionHandlers,
-  loadContextPerHandler,
-  prepareWithHandler,
-} from '.';
+import { type ActionHandlersRegistry, getActionHandlers, prepareWithHandler } from '.';
 
 /**
- * The invocation helpers take the registry as a parameter, so tests
+ * `prepareWithHandler` takes the registry as a parameter, so tests
  * build their own inline registries instead of touching the canonical
  * one. No `wipeRegistry`, no `afterEach` teardown — the production
  * registry (retrieved via `getActionHandlers()`) is only read here for
  * the isolated pin tests below, never mutated or restored.
  */
 
-// Minimal stand-ins — the invocation helpers never inspect these
+// Minimal stand-ins — `prepareWithHandler` never inspects these
 // shapes, so casting through `unknown` keeps the test wiring small
 // without weakening any production type.
 const fakeAlertEvent = {} as AlertEventRecord;
@@ -56,16 +44,9 @@ const makeUnsnoozeItem = (): HandlerItem<
   alertEvent: fakeAlertEvent,
 });
 
-const makeContext = (): HandlerPrepareContext<unknown> => ({
+const makeContext = (): HandlerPrepareContext => ({
   alertActionDoc: fakeAuditDoc,
-  userProfileUid: 'user-1',
-  context: undefined,
 });
-
-const makeServices = (): HandlerServices => {
-  const { queryService } = createQueryService();
-  return { spaceId: 'default', queryService };
-};
 
 /**
  * Builds a test registry whose every slot points at `defaultHandler`
@@ -76,14 +57,14 @@ const makeServices = (): HandlerServices => {
  *
  * The single cast bridges the variance gap: `ActionHandler` is
  * contravariant in `TBody` (the *sound* reason the wide `defaultHandler`
- * fits every narrow slot); method-shorthand on `prepare` /
- * `loadContext` means TS itself checks bivariantly — same conclusion,
- * looser rule. Either way, TS can't follow the wide-handler-fits-every-
- * narrow-slot reasoning across `Object.fromEntries`, hence the cast.
+ * fits every narrow slot); method-shorthand on `prepare` means TS itself
+ * checks bivariantly — same conclusion, looser rule. Either way, TS
+ * can't follow the wide-handler-fits-every-narrow-slot reasoning across
+ * `Object.fromEntries`, hence the cast.
  */
 const buildTestRegistry = (
   overrides: Partial<ActionHandlersRegistry>,
-  defaultHandler: ActionHandler<CreateAlertActionBody, unknown> = {
+  defaultHandler: ActionHandler = {
     prepare: () => ({ alertActionDoc: fakeAuditDoc }),
   }
 ): ActionHandlersRegistry => {
@@ -139,17 +120,9 @@ describe('production handler registry (getActionHandlers)', () => {
       const alertActionDoc = fakeAuditDoc;
       const prepared = getActionHandlers()[ALERT_EPISODE_ACTION_TYPE.ACK].prepare(makeAckItem(), {
         alertActionDoc,
-        userProfileUid: 'user-1',
-        context: undefined,
       });
 
       expect(prepared).toEqual({ alertActionDoc });
-    });
-
-    it('declares no loadContext — audit-only actions never preload', () => {
-      // Every audit-only slot is the same reference, so checking one
-      // proves the contract for all six.
-      expect(getActionHandlers()[ALERT_EPISODE_ACTION_TYPE.ACK].loadContext).toBeUndefined();
     });
   });
 });
@@ -195,131 +168,5 @@ describe('prepareWithHandler', () => {
     prepareWithHandler(item, ctx, registry);
 
     expect(prepare).toHaveBeenCalledWith(item, ctx);
-  });
-});
-
-describe('loadContextPerHandler', () => {
-  it("calls each present handler's `loadContext` with its own items + the shared services", async () => {
-    const ackContext = { source: 'ack' };
-    const unsnoozeContext = { source: 'unsnooze' };
-
-    const ackLoad = jest.fn().mockResolvedValue(ackContext);
-    const unsnoozeLoad = jest.fn().mockResolvedValue(unsnoozeContext);
-
-    const registry = buildTestRegistry({
-      [ALERT_EPISODE_ACTION_TYPE.ACK]: {
-        prepare: () => ({ alertActionDoc: fakeAuditDoc }),
-        loadContext: ackLoad,
-      },
-      [ALERT_EPISODE_ACTION_TYPE.UNSNOOZE]: {
-        prepare: () => ({ alertActionDoc: fakeAuditDoc }),
-        loadContext: unsnoozeLoad,
-      },
-    });
-
-    const ackItems = [makeAckItem()];
-    const unsnoozeItems = [makeUnsnoozeItem(), makeUnsnoozeItem()];
-    const services = makeServices();
-
-    const result = await loadContextPerHandler(
-      {
-        [ALERT_EPISODE_ACTION_TYPE.ACK]: ackItems,
-        [ALERT_EPISODE_ACTION_TYPE.UNSNOOZE]: unsnoozeItems,
-      },
-      services,
-      registry
-    );
-
-    expect(result).toEqual({
-      [ALERT_EPISODE_ACTION_TYPE.ACK]: ackContext,
-      [ALERT_EPISODE_ACTION_TYPE.UNSNOOZE]: unsnoozeContext,
-    });
-    expect(ackLoad).toHaveBeenCalledWith(ackItems, services);
-    expect(unsnoozeLoad).toHaveBeenCalledWith(unsnoozeItems, services);
-  });
-
-  it('returns `undefined` for handlers that do not define `loadContext` (no-preload signal)', async () => {
-    // The "no preload" handler is a first-class case — the orchestrator
-    // passes that `undefined` straight through to `prepare` as
-    // `ctx.context`. A missing entry in the result map would force the
-    // orchestrator to special-case it.
-    const registry = buildTestRegistry({
-      [ALERT_EPISODE_ACTION_TYPE.ACK]: {
-        prepare: () => ({ alertActionDoc: fakeAuditDoc }),
-      },
-    });
-
-    const result = await loadContextPerHandler(
-      { [ALERT_EPISODE_ACTION_TYPE.ACK]: [makeAckItem()] },
-      makeServices(),
-      registry
-    );
-
-    expect(result).toHaveProperty(ALERT_EPISODE_ACTION_TYPE.ACK);
-    expect(result[ALERT_EPISODE_ACTION_TYPE.ACK]).toBeUndefined();
-  });
-
-  it('skips entries that map to an empty action_type bucket (no handler call)', async () => {
-    // The orchestrator may hand us an empty bucket if every item of
-    // that type got filtered out during pairing. Iterating only over
-    // the keys present in the input means we never invoke a handler
-    // with a zero-length items list — which is also a useful invariant
-    // for handler authors to rely on.
-    const ackLoad = jest.fn().mockResolvedValue('ack-context');
-    const registry = buildTestRegistry({
-      [ALERT_EPISODE_ACTION_TYPE.ACK]: {
-        prepare: () => ({ alertActionDoc: fakeAuditDoc }),
-        loadContext: ackLoad,
-      },
-    });
-
-    const result = await loadContextPerHandler({}, makeServices(), registry);
-
-    expect(result).toEqual({});
-    expect(ackLoad).not.toHaveBeenCalled();
-  });
-
-  it('runs all handlers in parallel rather than sequentially', async () => {
-    let ackResolve: (value: unknown) => void;
-
-    const ackLoad = jest.fn().mockReturnValue(
-      new Promise((resolve) => {
-        ackResolve = resolve;
-      })
-    );
-
-    const unsnoozeLoad = jest.fn().mockResolvedValue('unsnooze-context');
-
-    const registry = buildTestRegistry({
-      [ALERT_EPISODE_ACTION_TYPE.ACK]: {
-        prepare: () => ({ alertActionDoc: fakeAuditDoc }),
-        loadContext: ackLoad,
-      },
-      [ALERT_EPISODE_ACTION_TYPE.UNSNOOZE]: {
-        prepare: () => ({ alertActionDoc: fakeAuditDoc }),
-        loadContext: unsnoozeLoad,
-      },
-    });
-
-    const pending = loadContextPerHandler(
-      {
-        [ALERT_EPISODE_ACTION_TYPE.ACK]: [makeAckItem()],
-        [ALERT_EPISODE_ACTION_TYPE.UNSNOOZE]: [makeUnsnoozeItem()],
-      },
-      makeServices(),
-      registry
-    );
-
-    // Yield twice so both `loadContext` calls have a chance to
-    // execute. With sequential dispatch the second would still be
-    // queued behind the first.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(ackLoad).toHaveBeenCalledTimes(1);
-    expect(unsnoozeLoad).toHaveBeenCalledTimes(1);
-
-    ackResolve!('ack-context');
-    await pending;
   });
 });

@@ -67,14 +67,8 @@ const assertEpisodeIsDeactivatable = (alertEvent: AlertEventRecord): void => {
  *    for the next rule run and without joining to `.alert-actions`.
  * 2. The `.alert-actions` audit document already built by the
  *    orchestrator (`alertActionDoc` — unchanged).
- *
- * No `loadContext`: every piece of input is already on `alertEvent`
- * (group_hash, rule_id/version, episode_id, data_json, severity,
- * space_id, current episode_status). The handler is pure and
- * synchronous — preconditions throw on rejection, otherwise build and
- * return.
  */
-export const deactivateHandler: ActionHandler<DeactivateAlertActionBody, unknown> = {
+export const deactivateHandler: ActionHandler<DeactivateAlertActionBody> = {
   prepare: (item, { alertActionDoc }) => {
     const { alertEvent } = item;
     assertEpisodeIsDeactivatable(alertEvent);

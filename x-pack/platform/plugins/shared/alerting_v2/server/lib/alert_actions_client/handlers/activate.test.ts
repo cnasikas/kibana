@@ -14,20 +14,9 @@ import {
   type AlertEpisodeStatus,
 } from '../../../resources/datastreams/alert_events';
 import { ALERTING_V2_ERROR_CODES } from '../../errors/error_codes';
-import { createQueryService } from '../../services/query_service/query_service.mock';
-import {
-  getAlertEventESQLResponse,
-  getLastEpisodeLifecycleActionsESQLResponse,
-} from '../fixtures/query_responses';
-import type { HandlerPrepareContext, HandlerServices } from '../handler';
 import { buildAlertEventRecord, buildHandlerItem, buildHandlerPrepareContext } from '../test_utils';
 import type { AlertEventRecord } from '../types';
 import { activateHandler } from './activate';
-
-interface ActivateContextEntry {
-  lastLifecycleActionType: string | null;
-  preDeactivateEvent: AlertEventRecord | null;
-}
 
 const FIXED_NOW = '2026-06-28T19:00:00.000Z';
 
@@ -39,26 +28,17 @@ afterAll(() => {
   jest.useRealTimers();
 });
 
+// Activate's precondition is `episode_status === 'inactive'`, so the
+// "current" alert event fed to the handler is the deactivate-synthetic
+// (or a naturally-recovered inactive event). We only override that one
+// field on top of the shared default.
 const buildAlertEvent = (overrides: Partial<AlertEventRecord> = {}): AlertEventRecord =>
   buildAlertEventRecord({
-    severity: 'medium',
     episode_status: alertEpisodeStatus.inactive,
     ...overrides,
   });
 
-// The pre-deactivate event is the last engine-emitted state before the
-// user's deactivate — earlier `@timestamp`, a higher `rule_version`,
-// a distinctive `data_json`, and (importantly) a non-null
-// `episode_status_count` since the activate handler forwards it to the
-// synthetic doc.
-const buildPreDeactivateEvent = (overrides: Partial<AlertEventRecord> = {}): AlertEventRecord =>
-  buildAlertEventRecord({
-    '@timestamp': '2026-06-28T18:50:00.000Z',
-    rule_version: 3,
-    data_json: { hostname: 'h-pre' },
-    episode_status_count: 5,
-    ...overrides,
-  });
+const buildCtx = buildHandlerPrepareContext;
 
 const buildItem = (alertEvent: AlertEventRecord = buildAlertEvent()) =>
   buildHandlerItem(
@@ -66,281 +46,109 @@ const buildItem = (alertEvent: AlertEventRecord = buildAlertEvent()) =>
     alertEvent
   );
 
-const buildCtx = (
-  context: Map<string, ActivateContextEntry>,
-  overrides: Partial<HandlerPrepareContext<Map<string, ActivateContextEntry>>> = {}
-) => buildHandlerPrepareContext(context, overrides);
-
-const buildContextEntry = (
-  overrides: Partial<ActivateContextEntry> = {}
-): ActivateContextEntry => ({
-  lastLifecycleActionType: ALERT_EPISODE_ACTION_TYPE.DEACTIVATE,
-  preDeactivateEvent: buildPreDeactivateEvent(),
-  ...overrides,
-});
-
-const buildContextMap = (
-  entries: Array<[string, ActivateContextEntry]>
-): Map<string, ActivateContextEntry> => new Map(entries);
-
 describe('activateHandler', () => {
-  it('exposes a loadContext implementation — activate needs I/O preload', () => {
-    expect(typeof activateHandler.loadContext).toBe('function');
-  });
-
-  describe('prepare (pure, context provided)', () => {
-    it('forwards the precomputed audit doc unchanged on the happy path', () => {
-      const context = buildContextMap([['episode-1', buildContextEntry()]]);
-      const ctx = buildCtx(context);
-
+  describe('happy path', () => {
+    it('forwards the precomputed audit doc unchanged', () => {
+      const ctx = buildCtx();
       const prepared = activateHandler.prepare(buildItem(), ctx);
-
       expect(prepared.alertActionDoc).toBe(ctx.alertActionDoc);
     });
 
-    it('rebuilds the synthetic rule event from the pre-deactivate event with @timestamp advanced to now', () => {
-      const preDeactivateEvent = buildPreDeactivateEvent({
-        rule_id: 'rule-pre',
-        rule_version: 7,
-        group_hash: 'group-pre',
-        episode_id: 'episode-1',
-        space_id: 'space-pre',
-        source: 'engine-x',
-        data_json: { rebuilt: true },
-        severity: 'critical',
-        episode_status: alertEpisodeStatus.recovering,
-        episode_status_count: 11,
-        status: alertEventStatus.breached,
-      });
-      const context = buildContextMap([['episode-1', buildContextEntry({ preDeactivateEvent })]]);
-
-      const prepared = activateHandler.prepare(buildItem(), buildCtx(context));
+    it('builds a synthetic .rule-events doc that forces the episode back to active + breached', () => {
+      const alertEvent = buildAlertEvent();
+      const prepared = activateHandler.prepare(buildItem(alertEvent), buildCtx());
 
       expect(prepared.ruleEvent).toMatchObject({
         '@timestamp': FIXED_NOW,
-        rule: { id: 'rule-pre', version: 7 },
-        group_hash: 'group-pre',
-        data: { rebuilt: true },
+        rule: { id: alertEvent.rule_id, version: alertEvent.rule_version },
+        group_hash: alertEvent.group_hash,
+        data: alertEvent.data_json,
         status: alertEventStatus.breached,
-        source: 'engine-x',
+        source: alertEvent.source,
         type: alertEventType.alert,
-        space_id: 'space-pre',
-        episode: {
-          id: 'episode-1',
-          status: alertEpisodeStatus.recovering,
-          status_count: 11,
-        },
-        severity: 'critical',
+        space_id: alertEvent.space_id,
+        episode: { id: alertEvent.episode_id, status: alertEpisodeStatus.active },
+        severity: alertEvent.severity,
       });
     });
 
-    it('defaults the pre-deactivate rule version to 1 when missing', () => {
-      const preDeactivateEvent = buildPreDeactivateEvent({ rule_version: undefined });
-      const context = buildContextMap([['episode-1', buildContextEntry({ preDeactivateEvent })]]);
-
-      const prepared = activateHandler.prepare(buildItem(), buildCtx(context));
-
-      expect(prepared.ruleEvent?.rule.version).toBe(1);
-    });
-
-    it("defaults rule event status to 'breached' when the pre-deactivate event omits status", () => {
-      const preDeactivateEvent = buildPreDeactivateEvent({ status: undefined });
-      const context = buildContextMap([['episode-1', buildContextEntry({ preDeactivateEvent })]]);
-
-      const prepared = activateHandler.prepare(buildItem(), buildCtx(context));
-
-      expect(prepared.ruleEvent?.status).toBe(alertEventStatus.breached);
-    });
-
-    it('omits severity / episode.status_count when the pre-deactivate event has none', () => {
-      const preDeactivateEvent = buildPreDeactivateEvent({
-        severity: null,
-        episode_status_count: null,
-      });
-      const context = buildContextMap([['episode-1', buildContextEntry({ preDeactivateEvent })]]);
-
-      const prepared = activateHandler.prepare(buildItem(), buildCtx(context));
-
-      expect(prepared.ruleEvent?.severity).toBeUndefined();
+    it('omits episode.status_count on the synthetic event — mirroring the director on any → active transition', () => {
+      const prepared = activateHandler.prepare(buildItem(), buildCtx());
+      expect(prepared.ruleEvent?.episode).toBeDefined();
       expect(prepared.ruleEvent?.episode?.status_count).toBeUndefined();
     });
 
-    describe('precondition: episode must be inactive', () => {
-      it.each<AlertEpisodeStatus | null | undefined>([
-        alertEpisodeStatus.active,
-        alertEpisodeStatus.recovering,
-        alertEpisodeStatus.pending,
-        null,
-        undefined,
-      ])(
-        'rejects with INVALID_EPISODE_STATE_TRANSITION (400) when episode_status is %s',
-        (status) => {
-          const context = buildContextMap([['episode-1', buildContextEntry()]]);
-
-          try {
-            activateHandler.prepare(
-              buildItem(buildAlertEvent({ episode_status: status })),
-              buildCtx(context)
-            );
-            throw new Error('expected handler to throw');
-          } catch (error) {
-            expect(Boom.isBoom(error)).toBe(true);
-            expect(error.output.statusCode).toBe(400);
-            expect(error.data).toMatchObject({
-              code: ALERTING_V2_ERROR_CODES.INVALID_EPISODE_STATE_TRANSITION,
-              details: {
-                group_hash: 'group-1',
-                episode_id: 'episode-1',
-                episode_status: status ?? null,
-                action_type: ALERT_EPISODE_ACTION_TYPE.ACTIVATE,
-              },
-            });
-          }
-        }
+    it('defaults rule version to 1 when the alert event omits it', () => {
+      const prepared = activateHandler.prepare(
+        buildItem(buildAlertEvent({ rule_version: undefined })),
+        buildCtx()
       );
+      expect(prepared.ruleEvent?.rule.version).toBe(1);
     });
 
-    describe('precondition: most recent lifecycle action must be deactivate', () => {
-      it.each<string | null>([null, ALERT_EPISODE_ACTION_TYPE.ACTIVATE])(
-        'rejects with INVALID_EPISODE_STATE_TRANSITION (400) when last lifecycle action is %s',
-        (lastLifecycleActionType) => {
-          const context = buildContextMap([
-            ['episode-1', buildContextEntry({ lastLifecycleActionType })],
-          ]);
-
-          try {
-            activateHandler.prepare(buildItem(), buildCtx(context));
-            throw new Error('expected handler to throw');
-          } catch (error) {
-            expect(Boom.isBoom(error)).toBe(true);
-            expect(error.output.statusCode).toBe(400);
-            expect(error.data).toMatchObject({
-              code: ALERTING_V2_ERROR_CODES.INVALID_EPISODE_STATE_TRANSITION,
-              details: {
-                action_type: ALERT_EPISODE_ACTION_TYPE.ACTIVATE,
-                last_lifecycle_action: lastLifecycleActionType,
-              },
-            });
-            expect(error.message).toContain(`[${lastLifecycleActionType ?? 'none'}]`);
-          }
-        }
+    it('omits severity on the synthetic event when the alert event has none', () => {
+      const prepared = activateHandler.prepare(
+        buildItem(buildAlertEvent({ severity: null })),
+        buildCtx()
       );
-    });
-
-    describe('precondition: pre-deactivate event must exist', () => {
-      it('rejects with ALERT_EVENT_NOT_FOUND (404) when the pre-deactivate event is missing', () => {
-        const context = buildContextMap([
-          ['episode-1', buildContextEntry({ preDeactivateEvent: null })],
-        ]);
-
-        try {
-          activateHandler.prepare(buildItem(), buildCtx(context));
-          throw new Error('expected handler to throw');
-        } catch (error) {
-          expect(Boom.isBoom(error)).toBe(true);
-          expect(error.output.statusCode).toBe(404);
-          expect(error.data).toMatchObject({
-            code: ALERTING_V2_ERROR_CODES.ALERT_EVENT_NOT_FOUND,
-            details: { group_hash: 'group-1', episode_id: 'episode-1' },
-          });
-        }
-      });
-
-      it('also rejects when the episode entry is entirely absent from the context map', () => {
-        // Missing entry → handler falls back to the empty record and the
-        // pre-deactivate precondition fires (404). The lifecycle and
-        // status checks fire first; this test exercises status alone by
-        // pointing at an inactive event with no map entry.
-        const context = buildContextMap([]);
-
-        expect(() => activateHandler.prepare(buildItem(), buildCtx(context))).toThrow();
-      });
-    });
-
-    it("throws plainly when the pre-deactivate event's episode_status is neither active nor recovering (data corruption)", () => {
-      const preDeactivateEvent = buildPreDeactivateEvent({
-        episode_status: alertEpisodeStatus.inactive,
-      });
-      const context = buildContextMap([['episode-1', buildContextEntry({ preDeactivateEvent })]]);
-
-      expect(() => activateHandler.prepare(buildItem(), buildCtx(context))).toThrow(
-        /Pre-deactivate event has unexpected episode_status/
-      );
+      expect(prepared.ruleEvent?.severity).toBeUndefined();
     });
   });
 
-  describe('loadContext (preload)', () => {
-    const buildServices = () => {
-      const { queryService, mockEsClient } = createQueryService();
-      const services: HandlerServices = { queryService, spaceId: 'default' };
-      return { services, mockEsClient };
-    };
+  describe('precondition: episode must be inactive', () => {
+    it.each<AlertEpisodeStatus | null | undefined>([
+      alertEpisodeStatus.active,
+      alertEpisodeStatus.recovering,
+      alertEpisodeStatus.pending,
+      null,
+      undefined,
+    ])(
+      'rejects activate with INVALID_EPISODE_STATE_TRANSITION (400) when episode_status is %s',
+      (status) => {
+        try {
+          activateHandler.prepare(
+            buildItem(buildAlertEvent({ episode_status: status })),
+            buildCtx()
+          );
+          throw new Error('expected handler to throw');
+        } catch (error) {
+          expect(Boom.isBoom(error)).toBe(true);
+          expect(error.output.statusCode).toBe(400);
+          expect(error.data).toMatchObject({
+            code: ALERTING_V2_ERROR_CODES.INVALID_EPISODE_STATE_TRANSITION,
+            details: {
+              group_hash: 'group-1',
+              episode_id: 'episode-1',
+              episode_status: status ?? null,
+              action_type: ALERT_EPISODE_ACTION_TYPE.ACTIVATE,
+            },
+          });
+        }
+      }
+    );
 
-    it('returns an empty map when no items are supplied', async () => {
-      const { services } = buildServices();
-      const result = await activateHandler.loadContext!([], services);
-      expect(result.size).toBe(0);
-    });
-
-    it('issues one lifecycle query + one pre-deactivate query against the space-scoped indices, in parallel', async () => {
-      const { services, mockEsClient } = buildServices();
-
-      mockEsClient.esql.query
-        .mockResolvedValueOnce(
-          getLastEpisodeLifecycleActionsESQLResponse([
-            { episode_id: 'episode-1', last_action_type: ALERT_EPISODE_ACTION_TYPE.DEACTIVATE },
-          ])
-        )
-        .mockResolvedValueOnce(
-          getAlertEventESQLResponse([{ episode_id: 'episode-1', episode_status: 'active' }])
+    it('renders the rejection message with the actual status value when present', () => {
+      try {
+        activateHandler.prepare(
+          buildItem(buildAlertEvent({ episode_status: alertEpisodeStatus.active })),
+          buildCtx()
         );
-
-      const result = await activateHandler.loadContext!([buildItem()], services);
-
-      expect(mockEsClient.esql.query).toHaveBeenCalledTimes(2);
-      const issuedQueries = mockEsClient.esql.query.mock.calls.map(([req]) => req.query);
-      expect(issuedQueries.some((q) => q.includes('FROM ".alert-actions"'))).toBe(true);
-      expect(issuedQueries.some((q) => q.includes('FROM ".rule-events"'))).toBe(true);
-      expect(issuedQueries.every((q) => q.includes('space_id == "default"'))).toBe(true);
-
-      expect(result.get('episode-1')).toMatchObject({
-        lastLifecycleActionType: ALERT_EPISODE_ACTION_TYPE.DEACTIVATE,
-        preDeactivateEvent: expect.objectContaining({ episode_id: 'episode-1' }),
-      });
+        throw new Error('expected handler to throw');
+      } catch (error) {
+        expect(error.message).toContain(`[${alertEpisodeStatus.active}]`);
+        expect(error.message).toContain("only 'inactive' episodes can be activated");
+      }
     });
 
-    it('produces a null entry for any episode the ES|QL response did not mention', async () => {
-      const { services, mockEsClient } = buildServices();
-
-      mockEsClient.esql.query
-        .mockResolvedValueOnce(getLastEpisodeLifecycleActionsESQLResponse([]))
-        .mockResolvedValueOnce(getAlertEventESQLResponse([]));
-
-      const result = await activateHandler.loadContext!([buildItem()], services);
-
-      expect(result.get('episode-1')).toEqual({
-        lastLifecycleActionType: null,
-        preDeactivateEvent: null,
-      });
-    });
-
-    it('deduplicates episode_ids across the input items', async () => {
-      const { services, mockEsClient } = buildServices();
-
-      mockEsClient.esql.query
-        .mockResolvedValueOnce(getLastEpisodeLifecycleActionsESQLResponse([]))
-        .mockResolvedValueOnce(getAlertEventESQLResponse([]));
-
-      const itemA = buildItem(buildAlertEvent({ episode_id: 'episode-1' }));
-      const itemB = buildItem(buildAlertEvent({ episode_id: 'episode-1' }));
-      const itemC = buildItem(buildAlertEvent({ episode_id: 'episode-2' }));
-
-      await activateHandler.loadContext!([itemA, itemB, itemC], services);
-
-      const issuedQueries = mockEsClient.esql.query.mock.calls.map(([req]) => req.query);
-      for (const query of issuedQueries) {
-        expect(query.match(/"episode-1"/g)?.length).toBe(1);
-        expect(query.match(/"episode-2"/g)?.length).toBe(1);
+    it("renders 'unknown' when the alert event has no episode status", () => {
+      try {
+        activateHandler.prepare(
+          buildItem(buildAlertEvent({ episode_status: undefined })),
+          buildCtx()
+        );
+        throw new Error('expected handler to throw');
+      } catch (error) {
+        expect(error.message).toContain('[unknown]');
       }
     });
   });

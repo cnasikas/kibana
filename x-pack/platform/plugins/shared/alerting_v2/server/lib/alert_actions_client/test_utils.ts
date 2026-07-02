@@ -12,20 +12,15 @@ import type { HandlerItem, HandlerPrepareContext } from './handler';
 import type { AlertEventRecord } from './types';
 
 /**
- * Builds a `HandlerPrepareContext<TCtx>` — the per-item struct the
- * orchestrator hands each handler's `prepare` method. The sentinel
- * `alertActionDoc` and stub `userProfileUid` are inconsequential to
- * handler logic (tests either forward the doc unchanged or assert on
- * identity, never on content); callers only need to supply their
- * handler's own preload shape `TCtx`.
+ * Builds a `HandlerPrepareContext` — the per-item struct the orchestrator
+ * hands each handler's `prepare` method. The sentinel `alertActionDoc`
+ * is inconsequential to handler logic (tests either forward the doc
+ * unchanged or assert on identity, never on content).
  */
-export const buildHandlerPrepareContext = <TCtx>(
-  context: TCtx,
-  overrides: Partial<HandlerPrepareContext<TCtx>> = {}
-): HandlerPrepareContext<TCtx> => ({
+export const buildHandlerPrepareContext = (
+  overrides: Partial<HandlerPrepareContext> = {}
+): HandlerPrepareContext => ({
   alertActionDoc: { sentinel: 'audit-doc' } as unknown as AlertAction,
-  userProfileUid: 'profile-1',
-  context,
   ...overrides,
 });
 

@@ -10,13 +10,7 @@ import {
   type AlertEpisodeActionType,
   type CreateAlertActionBody,
 } from '@kbn/alerting-v2-schemas';
-import type {
-  ActionHandler,
-  HandlerItem,
-  HandlerPrepareContext,
-  HandlerServices,
-  PreparedAction,
-} from '../handler';
+import type { ActionHandler, HandlerItem, HandlerPrepareContext, PreparedAction } from '../handler';
 import { activateHandler } from './activate';
 import { deactivateHandler } from './deactivate';
 
@@ -27,22 +21,18 @@ import { deactivateHandler } from './deactivate';
  * point of the registry approach.
  */
 export type ActionHandlersRegistry = {
-  [T in AlertEpisodeActionType]: ActionHandler<
-    Extract<CreateAlertActionBody, { action_type: T }>,
-    unknown
-  >;
+  [T in AlertEpisodeActionType]: ActionHandler<Extract<CreateAlertActionBody, { action_type: T }>>;
 };
 
 /**
  * The audit-only handler: returns the orchestrator-built audit doc
- * verbatim, has no preload, applies no preconditions. Most non-lifecycle
- * action types (ack/unack/assign/tag/snooze/unsnooze) are
- * behaviourally identical to one another, so the registry points every
- * one of those slots at this single shared singleton instead of paying
- * for a per-action file.
+ * verbatim, applies no preconditions. Most non-lifecycle action types
+ * (ack/unack/assign/tag/snooze/unsnooze) are behaviourally identical to
+ * one another, so the registry points every one of those slots at this
+ * single shared singleton instead of paying for a per-action file.
  *
  */
-const auditOnlyHandler: ActionHandler<CreateAlertActionBody, unknown> = {
+const auditOnlyHandler: ActionHandler = {
   prepare: (_item, { alertActionDoc }) => ({ alertActionDoc }),
 };
 
@@ -78,38 +68,9 @@ export const getActionHandlers = (): Readonly<ActionHandlersRegistry> => ACTION_
  */
 export const prepareWithHandler = (
   item: HandlerItem<CreateAlertActionBody>,
-  ctx: HandlerPrepareContext<unknown>,
+  ctx: HandlerPrepareContext,
   handlers: Readonly<ActionHandlersRegistry>
 ): PreparedAction => {
-  const handler = handlers[item.action.action_type] as ActionHandler<
-    CreateAlertActionBody,
-    unknown
-  >;
+  const handler = handlers[item.action.action_type] as ActionHandler<CreateAlertActionBody>;
   return handler.prepare(item, ctx);
-};
-
-/**
- * Runs every handler's `loadContext` (those that define one) in
- * parallel, one call per `action_type` present in `itemsByType`.
- * Returns a sparse map of `action_type` -> opaque context, consumed
- * only via {@link prepareWithHandler}.
- *
- */
-export const loadContextPerHandler = async (
-  itemsByType: Partial<Record<AlertEpisodeActionType, Array<HandlerItem<CreateAlertActionBody>>>>,
-  services: HandlerServices,
-  handlers: Readonly<ActionHandlersRegistry>
-): Promise<Partial<Record<AlertEpisodeActionType, unknown>>> => {
-  const entries = Object.entries(itemsByType) as Array<
-    [AlertEpisodeActionType, Array<HandlerItem<CreateAlertActionBody>>]
-  >;
-
-  const loaded = await Promise.all(
-    entries.map(async ([type, items]) => {
-      const handler = handlers[type] as ActionHandler<CreateAlertActionBody, unknown>;
-      return [type, await handler.loadContext?.(items, services)] as const;
-    })
-  );
-
-  return Object.fromEntries(loaded);
 };

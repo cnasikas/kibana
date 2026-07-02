@@ -14,7 +14,6 @@ import {
   type AlertEpisodeStatus,
 } from '../../../resources/datastreams/alert_events';
 import { ALERTING_V2_ERROR_CODES } from '../../errors/error_codes';
-import type { HandlerPrepareContext } from '../handler';
 import { buildAlertEventRecord, buildHandlerItem, buildHandlerPrepareContext } from '../test_utils';
 import type { AlertEventRecord } from '../types';
 import { deactivateHandler } from './deactivate';
@@ -29,8 +28,7 @@ afterAll(() => {
   jest.useRealTimers();
 });
 
-const buildCtx = (overrides: Partial<HandlerPrepareContext<unknown>> = {}) =>
-  buildHandlerPrepareContext<unknown>(undefined, overrides);
+const buildCtx = buildHandlerPrepareContext;
 
 const buildItem = (alertEvent: AlertEventRecord) =>
   buildHandlerItem(
@@ -42,10 +40,6 @@ const buildItem = (alertEvent: AlertEventRecord) =>
   );
 
 describe('deactivateHandler', () => {
-  it('does not preload context — every input is already on the alertEvent', () => {
-    expect(deactivateHandler.loadContext).toBeUndefined();
-  });
-
   describe('happy path', () => {
     it.each<AlertEpisodeStatus>([alertEpisodeStatus.active, alertEpisodeStatus.recovering])(
       'allows deactivate when episode_status is %s',

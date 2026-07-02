@@ -10,11 +10,11 @@ import type { RawAlertEventRow } from '../types';
 
 /**
  * Canonical column order emitted by every alert-event ES|QL projection in
- * this client (see the shared `KEEP …` clauses in
- * `context_loaders/load_latest_alert_events.ts` and
- * `handlers/activate.ts`). Kept in lock-step with `RawAlertEventRow` so a
- * new field on `AlertEventRecord` shows up here as a build failure until
- * it's projected consistently across production and tests.
+ * this client (see the shared `KEEP …` clause in
+ * `context_loaders/load_latest_alert_events.ts`). Kept in lock-step with
+ * `RawAlertEventRow` so a new field on `AlertEventRecord` shows up here
+ * as a build failure until it's projected consistently across production
+ * and tests.
  */
 const ALERT_EVENT_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: '@timestamp', type: 'date' },
@@ -53,9 +53,8 @@ const toAlertEventRow = (record: Partial<RawAlertEventRow>): FieldValue[] => [
  *
  * - Single-route path (`loadLastAlertEventOrThrow`): pass one record (or
  *   omit the argument to accept defaults).
- * - Batched paths (`loadLatestAlertEvents`, `bulkLoadLatestAlertEvents`,
- *   `findPreDeactivateAlertEvents`): pass an array — one entry per
- *   returned row.
+ * - Batched paths (`loadLatestAlertEvents`, `bulkLoadLatestAlertEvents`):
+ *   pass an array — one entry per returned row.
  * - "No matches" case: pass an empty array.
  */
 export const getAlertEventESQLResponse = (
@@ -68,27 +67,4 @@ export const getAlertEventESQLResponse = (
 export const getEmptyESQLResponse = (): EsqlQueryResponse => ({
   columns: [],
   values: [],
-});
-
-/**
- * Mocks the batched lifecycle ES|QL response (one row per episode). Each
- * record yields `{ episode_id, last_action_type }`, matching the shape
- * the activate handler's `loadContext` consumes (see
- * `handlers/activate.ts`).
- *
- * For the "no lifecycle action for this episode" case the caller can either
- * pass an empty array or simply omit the episode from the records list —
- * absence in the response maps to absence in the returned Map.
- */
-export const getLastEpisodeLifecycleActionsESQLResponse = (
-  records: ReadonlyArray<{ episode_id?: string; last_action_type?: string }> = []
-): EsqlQueryResponse => ({
-  columns: [
-    { name: 'episode_id', type: 'keyword' },
-    { name: 'last_action_type', type: 'keyword' },
-  ],
-  values: records.map(
-    (record) =>
-      [record.episode_id ?? 'episode-1', record.last_action_type ?? 'deactivate'] as FieldValue[]
-  ),
 });
