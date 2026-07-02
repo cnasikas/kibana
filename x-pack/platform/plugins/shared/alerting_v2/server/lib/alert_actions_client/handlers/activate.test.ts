@@ -14,7 +14,7 @@ import {
   type AlertEpisodeStatus,
 } from '../../../resources/datastreams/alert_events';
 import { ALERTING_V2_ERROR_CODES } from '../../errors/error_codes';
-import { buildAlertEventRecord, buildHandlerItem, buildHandlerPrepareContext } from '../test_utils';
+import { buildAlertEventRecord, buildHandlerItem } from '../test_utils';
 import type { AlertEventRecord } from '../types';
 import { activateHandler } from './activate';
 
@@ -38,8 +38,6 @@ const buildAlertEvent = (overrides: Partial<AlertEventRecord> = {}): AlertEventR
     ...overrides,
   });
 
-const buildCtx = buildHandlerPrepareContext;
-
 const buildItem = (alertEvent: AlertEventRecord = buildAlertEvent()) =>
   buildHandlerItem(
     { action_type: ALERT_EPISODE_ACTION_TYPE.ACTIVATE, reason: 'reopen for follow-up' } as const,
@@ -49,14 +47,14 @@ const buildItem = (alertEvent: AlertEventRecord = buildAlertEvent()) =>
 describe('activateHandler', () => {
   describe('happy path', () => {
     it('forwards the precomputed audit doc unchanged', () => {
-      const ctx = buildCtx();
-      const prepared = activateHandler.prepare(buildItem(), ctx);
-      expect(prepared.alertActionDoc).toBe(ctx.alertActionDoc);
+      const item = buildItem();
+      const prepared = activateHandler.prepare(item);
+      expect(prepared.alertActionDoc).toBe(item.alertActionDoc);
     });
 
     it('builds a synthetic .rule-events doc that forces the episode back to active + breached', () => {
       const alertEvent = buildAlertEvent();
-      const prepared = activateHandler.prepare(buildItem(alertEvent), buildCtx());
+      const prepared = activateHandler.prepare(buildItem(alertEvent));
 
       expect(prepared.ruleEvent).toMatchObject({
         '@timestamp': FIXED_NOW,
@@ -73,24 +71,20 @@ describe('activateHandler', () => {
     });
 
     it('omits episode.status_count on the synthetic event — mirroring the director on any → active transition', () => {
-      const prepared = activateHandler.prepare(buildItem(), buildCtx());
+      const prepared = activateHandler.prepare(buildItem());
       expect(prepared.ruleEvent?.episode).toBeDefined();
       expect(prepared.ruleEvent?.episode?.status_count).toBeUndefined();
     });
 
     it('defaults rule version to 1 when the alert event omits it', () => {
       const prepared = activateHandler.prepare(
-        buildItem(buildAlertEvent({ rule_version: undefined })),
-        buildCtx()
+        buildItem(buildAlertEvent({ rule_version: undefined }))
       );
       expect(prepared.ruleEvent?.rule.version).toBe(1);
     });
 
     it('omits severity on the synthetic event when the alert event has none', () => {
-      const prepared = activateHandler.prepare(
-        buildItem(buildAlertEvent({ severity: null })),
-        buildCtx()
-      );
+      const prepared = activateHandler.prepare(buildItem(buildAlertEvent({ severity: null })));
       expect(prepared.ruleEvent?.severity).toBeUndefined();
     });
   });
@@ -106,10 +100,7 @@ describe('activateHandler', () => {
       'rejects activate with INVALID_EPISODE_STATE_TRANSITION (400) when episode_status is %s',
       (status) => {
         try {
-          activateHandler.prepare(
-            buildItem(buildAlertEvent({ episode_status: status })),
-            buildCtx()
-          );
+          activateHandler.prepare(buildItem(buildAlertEvent({ episode_status: status })));
           throw new Error('expected handler to throw');
         } catch (error) {
           expect(Boom.isBoom(error)).toBe(true);
@@ -130,8 +121,7 @@ describe('activateHandler', () => {
     it('renders the rejection message with the actual status value when present', () => {
       try {
         activateHandler.prepare(
-          buildItem(buildAlertEvent({ episode_status: alertEpisodeStatus.active })),
-          buildCtx()
+          buildItem(buildAlertEvent({ episode_status: alertEpisodeStatus.active }))
         );
         throw new Error('expected handler to throw');
       } catch (error) {
@@ -142,10 +132,7 @@ describe('activateHandler', () => {
 
     it("renders 'unknown' when the alert event has no episode status", () => {
       try {
-        activateHandler.prepare(
-          buildItem(buildAlertEvent({ episode_status: undefined })),
-          buildCtx()
-        );
+        activateHandler.prepare(buildItem(buildAlertEvent({ episode_status: undefined })));
         throw new Error('expected handler to throw');
       } catch (error) {
         expect(error.message).toContain('[unknown]');

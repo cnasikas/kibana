@@ -7,16 +7,16 @@
 
 import { ALERT_EPISODE_ACTION_TYPE, type CreateAlertActionBody } from '@kbn/alerting-v2-schemas';
 import type { AlertAction } from '../../../resources/datastreams/alert_actions';
-import type { ActionHandler, HandlerItem, HandlerPrepareContext, PreparedAction } from '../handler';
+import type { ActionHandler, HandlerItem, PreparedAction } from '../handler';
 import type { AlertEventRecord } from '../types';
-import { type ActionHandlersRegistry, getActionHandlers, prepareWithHandler } from '.';
+import { ACTION_HANDLERS, type ActionHandlersRegistry, prepareWithHandler } from '.';
 
 /**
  * `prepareWithHandler` takes the registry as a parameter, so tests
  * build their own inline registries instead of touching the canonical
- * one. No `wipeRegistry`, no `afterEach` teardown — the production
- * registry (retrieved via `getActionHandlers()`) is only read here for
- * the isolated pin tests below, never mutated or restored.
+ * one. No `wipeRegistry`, no `afterEach` teardown — `ACTION_HANDLERS`
+ * is only read here for the isolated pin tests below, never mutated
+ * or restored.
  */
 
 // Minimal stand-ins — `prepareWithHandler` never inspects these
@@ -33,6 +33,7 @@ const makeAckItem = (): HandlerItem<
     episode_id: 'episode-1',
   },
   alertEvent: fakeAlertEvent,
+  alertActionDoc: fakeAuditDoc,
 });
 
 const makeUnsnoozeItem = (): HandlerItem<
@@ -42,9 +43,6 @@ const makeUnsnoozeItem = (): HandlerItem<
     action_type: ALERT_EPISODE_ACTION_TYPE.UNSNOOZE,
   },
   alertEvent: fakeAlertEvent,
-});
-
-const makeContext = (): HandlerPrepareContext => ({
   alertActionDoc: fakeAuditDoc,
 });
 
@@ -74,7 +72,7 @@ const buildTestRegistry = (
   return { ...base, ...overrides };
 };
 
-describe('production handler registry (getActionHandlers)', () => {
+describe('production handler registry (ACTION_HANDLERS)', () => {
   it('has a registered handler for every AlertEpisodeActionType value', () => {
     // The mapped type for `ActionHandlersRegistry` already enforces
     // exhaustiveness at compile time, but the runtime assertion
@@ -82,7 +80,7 @@ describe('production handler registry (getActionHandlers)', () => {
     // registry and gives a much friendlier failure when somebody adds
     // a new action_type and forgets to register a handler.
     const declaredActionTypes = Object.values(ALERT_EPISODE_ACTION_TYPE).sort();
-    const registeredActionTypes = Object.keys(getActionHandlers()).sort();
+    const registeredActionTypes = Object.keys(ACTION_HANDLERS).sort();
 
     expect(registeredActionTypes).toEqual(declaredActionTypes);
   });
@@ -109,20 +107,17 @@ describe('production handler registry (getActionHandlers)', () => {
       // serving six slots. Anyone replacing one slot with a bespoke
       // handler in the future should do so deliberately — this test
       // makes that intent visible.
-      const handlers = getActionHandlers();
-      const singletons = AUDIT_ONLY_ACTION_TYPES.map((type) => handlers[type]);
+      const singletons = AUDIT_ONLY_ACTION_TYPES.map((type) => ACTION_HANDLERS[type]);
       for (const handler of singletons) {
         expect(handler).toBe(singletons[0]);
       }
     });
 
     it('returns only the precomputed audit doc — no synthetic rule event', () => {
-      const alertActionDoc = fakeAuditDoc;
-      const prepared = getActionHandlers()[ALERT_EPISODE_ACTION_TYPE.ACK].prepare(makeAckItem(), {
-        alertActionDoc,
-      });
+      const item = makeAckItem();
+      const prepared = ACTION_HANDLERS[ALERT_EPISODE_ACTION_TYPE.ACK].prepare(item);
 
-      expect(prepared).toEqual({ alertActionDoc });
+      expect(prepared).toEqual({ alertActionDoc: item.alertActionDoc });
     });
   });
 });
@@ -145,28 +140,25 @@ describe('prepareWithHandler', () => {
 
     const ackItem = makeAckItem();
     const unsnoozeItem = makeUnsnoozeItem();
-    const ctx = makeContext();
 
-    expect(prepareWithHandler(ackItem, ctx, registry)).toBe(ackPrepared);
-    expect(prepareWithHandler(unsnoozeItem, ctx, registry)).toBe(unsnoozePrepared);
+    expect(prepareWithHandler(ackItem, registry)).toBe(ackPrepared);
+    expect(prepareWithHandler(unsnoozeItem, registry)).toBe(unsnoozePrepared);
 
     expect(ackPrepare).toHaveBeenCalledTimes(1);
     expect(unsnoozePrepare).toHaveBeenCalledTimes(1);
   });
 
-  it('forwards the item and prepare context unchanged to the handler', () => {
+  it('forwards the item unchanged to the handler', () => {
     // The handler must see exactly what the orchestrator passed; the
-    // helper has no business mutating either argument.
+    // helper has no business mutating the argument.
     const prepare = jest.fn().mockReturnValue({ alertActionDoc: fakeAuditDoc });
     const registry = buildTestRegistry({
       [ALERT_EPISODE_ACTION_TYPE.ACK]: { prepare },
     });
 
     const item = makeAckItem();
-    const ctx = makeContext();
+    prepareWithHandler(item, registry);
 
-    prepareWithHandler(item, ctx, registry);
-
-    expect(prepare).toHaveBeenCalledWith(item, ctx);
+    expect(prepare).toHaveBeenCalledWith(item);
   });
 });

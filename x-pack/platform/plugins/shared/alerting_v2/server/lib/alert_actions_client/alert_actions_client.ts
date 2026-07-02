@@ -33,7 +33,7 @@ import {
 } from './context_loaders/load_latest_alert_events';
 import type { AlertEventRecord } from './types';
 import type { PreparedAction } from './handler';
-import { getActionHandlers, prepareWithHandler } from './handlers';
+import { ACTION_HANDLERS, prepareWithHandler } from './handlers';
 
 @injectable()
 export class AlertActionsClient {
@@ -91,7 +91,7 @@ export class AlertActionsClient {
     const { action, alertEvent, userProfileUid } = params;
     const alertActionDoc = this.buildAlertActionDocument({ action, alertEvent, userProfileUid });
 
-    return prepareWithHandler({ action, alertEvent }, { alertActionDoc }, getActionHandlers());
+    return prepareWithHandler({ action, alertEvent, alertActionDoc }, ACTION_HANDLERS);
   }
 
   /**

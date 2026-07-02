@@ -86,8 +86,7 @@ const assertEpisodeIsActivatable = (alertEvent: AlertEventRecord): void => {
  */
 
 export const activateHandler: ActionHandler<ActivateAlertActionBody> = {
-  prepare: (item, { alertActionDoc }) => {
-    const { alertEvent } = item;
+  prepare: ({ alertEvent, alertActionDoc }) => {
     assertEpisodeIsActivatable(alertEvent);
 
     const ruleEvent = buildRuleEventDocument({

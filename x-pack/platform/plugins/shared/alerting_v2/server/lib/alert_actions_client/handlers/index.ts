@@ -10,7 +10,7 @@ import {
   type AlertEpisodeActionType,
   type CreateAlertActionBody,
 } from '@kbn/alerting-v2-schemas';
-import type { ActionHandler, HandlerItem, HandlerPrepareContext, PreparedAction } from '../handler';
+import type { ActionHandler, HandlerItem, PreparedAction } from '../handler';
 import { activateHandler } from './activate';
 import { deactivateHandler } from './deactivate';
 
@@ -30,22 +30,19 @@ export type ActionHandlersRegistry = {
  * (ack/unack/assign/tag/snooze/unsnooze) are behaviourally identical to
  * one another, so the registry points every one of those slots at this
  * single shared singleton instead of paying for a per-action file.
- *
  */
 const auditOnlyHandler: ActionHandler = {
-  prepare: (_item, { alertActionDoc }) => ({ alertActionDoc }),
+  prepare: ({ alertActionDoc }) => ({ alertActionDoc }),
 };
 
 /**
- * Canonical handler registry. Kept **module-private** so no consumer
- * can hold a live reference to (and therefore accidentally mutate) the
- * shared map. Access it via {@link getActionHandlers} instead.
- *
- * Typed as the **exhaustive** {@link ActionHandlersRegistry}: adding a
- * new `AlertEpisodeActionType` value without a matching slot is a TS
- * compile error at this declaration.
+ * Canonical handler registry. Typed as the **exhaustive**
+ * {@link ActionHandlersRegistry}: adding a new `AlertEpisodeActionType`
+ * value without a matching slot is a TS compile error here. `Readonly`
+ * blocks mutation at compile time — consumers get the map by value,
+ * they cannot swap or replace slots at runtime.
  */
-const ACTION_HANDLERS: Readonly<ActionHandlersRegistry> = {
+export const ACTION_HANDLERS: Readonly<ActionHandlersRegistry> = {
   [ALERT_EPISODE_ACTION_TYPE.ACK]: auditOnlyHandler,
   [ALERT_EPISODE_ACTION_TYPE.UNACK]: auditOnlyHandler,
   [ALERT_EPISODE_ACTION_TYPE.ASSIGN]: auditOnlyHandler,
@@ -55,8 +52,6 @@ const ACTION_HANDLERS: Readonly<ActionHandlersRegistry> = {
   [ALERT_EPISODE_ACTION_TYPE.DEACTIVATE]: deactivateHandler,
   [ALERT_EPISODE_ACTION_TYPE.ACTIVATE]: activateHandler,
 };
-
-export const getActionHandlers = (): Readonly<ActionHandlersRegistry> => ACTION_HANDLERS;
 
 /**
  * Calls the handler that `handlers` registers for
@@ -68,9 +63,8 @@ export const getActionHandlers = (): Readonly<ActionHandlersRegistry> => ACTION_
  */
 export const prepareWithHandler = (
   item: HandlerItem<CreateAlertActionBody>,
-  ctx: HandlerPrepareContext,
   handlers: Readonly<ActionHandlersRegistry>
 ): PreparedAction => {
   const handler = handlers[item.action.action_type] as ActionHandler<CreateAlertActionBody>;
-  return handler.prepare(item, ctx);
+  return handler.prepare(item);
 };

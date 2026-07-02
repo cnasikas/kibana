@@ -69,8 +69,7 @@ const assertEpisodeIsDeactivatable = (alertEvent: AlertEventRecord): void => {
  *    orchestrator (`alertActionDoc` — unchanged).
  */
 export const deactivateHandler: ActionHandler<DeactivateAlertActionBody> = {
-  prepare: (item, { alertActionDoc }) => {
-    const { alertEvent } = item;
+  prepare: ({ alertEvent, alertActionDoc }) => {
     assertEpisodeIsDeactivatable(alertEvent);
 
     const ruleEvent = buildRuleEventDocument({

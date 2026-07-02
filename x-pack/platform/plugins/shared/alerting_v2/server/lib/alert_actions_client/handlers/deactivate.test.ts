@@ -14,7 +14,7 @@ import {
   type AlertEpisodeStatus,
 } from '../../../resources/datastreams/alert_events';
 import { ALERTING_V2_ERROR_CODES } from '../../errors/error_codes';
-import { buildAlertEventRecord, buildHandlerItem, buildHandlerPrepareContext } from '../test_utils';
+import { buildAlertEventRecord, buildHandlerItem } from '../test_utils';
 import type { AlertEventRecord } from '../types';
 import { deactivateHandler } from './deactivate';
 
@@ -27,8 +27,6 @@ beforeAll(() => {
 afterAll(() => {
   jest.useRealTimers();
 });
-
-const buildCtx = buildHandlerPrepareContext;
 
 const buildItem = (alertEvent: AlertEventRecord) =>
   buildHandlerItem(
@@ -44,25 +42,21 @@ describe('deactivateHandler', () => {
     it.each<AlertEpisodeStatus>([alertEpisodeStatus.active, alertEpisodeStatus.recovering])(
       'allows deactivate when episode_status is %s',
       (status) => {
-        const ctx = buildCtx();
         expect(() =>
-          deactivateHandler.prepare(
-            buildItem(buildAlertEventRecord({ episode_status: status })),
-            ctx
-          )
+          deactivateHandler.prepare(buildItem(buildAlertEventRecord({ episode_status: status })))
         ).not.toThrow();
       }
     );
 
     it('forwards the precomputed audit doc unchanged', () => {
-      const ctx = buildCtx();
-      const prepared = deactivateHandler.prepare(buildItem(buildAlertEventRecord()), ctx);
-      expect(prepared.alertActionDoc).toBe(ctx.alertActionDoc);
+      const item = buildItem(buildAlertEventRecord());
+      const prepared = deactivateHandler.prepare(item);
+      expect(prepared.alertActionDoc).toBe(item.alertActionDoc);
     });
 
     it('builds a synthetic .rule-events doc that marks the episode inactive and recovered', () => {
       const alertEvent = buildAlertEventRecord();
-      const prepared = deactivateHandler.prepare(buildItem(alertEvent), buildCtx());
+      const prepared = deactivateHandler.prepare(buildItem(alertEvent));
 
       expect(prepared.ruleEvent).toMatchObject({
         '@timestamp': FIXED_NOW,
@@ -80,8 +74,7 @@ describe('deactivateHandler', () => {
 
     it('defaults rule version to 1 when the alert event omits it', () => {
       const prepared = deactivateHandler.prepare(
-        buildItem(buildAlertEventRecord({ rule_version: undefined })),
-        buildCtx()
+        buildItem(buildAlertEventRecord({ rule_version: undefined }))
       );
 
       expect(prepared.ruleEvent?.rule.version).toBe(1);
@@ -89,8 +82,7 @@ describe('deactivateHandler', () => {
 
     it('omits severity on the synthetic event when the alert event has none', () => {
       const prepared = deactivateHandler.prepare(
-        buildItem(buildAlertEventRecord({ severity: null })),
-        buildCtx()
+        buildItem(buildAlertEventRecord({ severity: null }))
       );
 
       expect(prepared.ruleEvent?.severity).toBeUndefined();
@@ -107,10 +99,7 @@ describe('deactivateHandler', () => {
       'rejects deactivate with INVALID_EPISODE_STATE_TRANSITION (400) when episode_status is %s',
       (status) => {
         try {
-          deactivateHandler.prepare(
-            buildItem(buildAlertEventRecord({ episode_status: status })),
-            buildCtx()
-          );
+          deactivateHandler.prepare(buildItem(buildAlertEventRecord({ episode_status: status })));
           throw new Error('expected handler to throw');
         } catch (error) {
           expect(Boom.isBoom(error)).toBe(true);

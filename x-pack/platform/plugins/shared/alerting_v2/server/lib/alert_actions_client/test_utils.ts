@@ -8,32 +8,29 @@
 import type { CreateAlertActionBody } from '@kbn/alerting-v2-schemas';
 import type { AlertAction } from '../../resources/datastreams/alert_actions';
 import { alertEpisodeStatus, alertEventStatus } from '../../resources/datastreams/alert_events';
-import type { HandlerItem, HandlerPrepareContext } from './handler';
+import type { HandlerItem } from './handler';
 import type { AlertEventRecord } from './types';
 
 /**
- * Builds a `HandlerPrepareContext` — the per-item struct the orchestrator
- * hands each handler's `prepare` method. The sentinel `alertActionDoc`
- * is inconsequential to handler logic (tests either forward the doc
- * unchanged or assert on identity, never on content).
+ * Sentinel audit doc used by handler tests. Handlers either forward
+ * this reference unchanged (audit-only) or wrap it alongside a
+ * synthetic `.rule-events` doc (lifecycle actions). Tests assert on
+ * identity, never on content, so the shape is deliberately opaque.
  */
-export const buildHandlerPrepareContext = (
-  overrides: Partial<HandlerPrepareContext> = {}
-): HandlerPrepareContext => ({
-  alertActionDoc: { sentinel: 'audit-doc' } as unknown as AlertAction,
-  ...overrides,
-});
+const SENTINEL_ALERT_ACTION_DOC = { sentinel: 'audit-doc' } as unknown as AlertAction;
 
 /**
- * Builds a `HandlerItem<TBody>` — the `{ action, alertEvent }` input the
- * orchestrator resolves for each request row. Callers own the `action`
- * body because each handler test targets a specific `action_type`
- * variant of the discriminated union.
+ * Builds a `HandlerItem<TBody>` — the single-argument struct the
+ * orchestrator hands to each handler's `prepare` method. Callers own
+ * the `action` body because each handler test targets a specific
+ * `action_type` variant of the discriminated union. `alertActionDoc`
+ * defaults to a sentinel that tests can compare by identity.
  */
 export const buildHandlerItem = <TBody extends CreateAlertActionBody>(
   action: TBody,
-  alertEvent: AlertEventRecord
-): HandlerItem<TBody> => ({ action, alertEvent });
+  alertEvent: AlertEventRecord,
+  alertActionDoc: AlertAction = SENTINEL_ALERT_ACTION_DOC
+): HandlerItem<TBody> => ({ action, alertEvent, alertActionDoc });
 
 /**
  * Builds an in-memory `AlertEventRecord` — the flattened, post-projection

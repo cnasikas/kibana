@@ -28,23 +28,20 @@ export interface PreparedAction {
 }
 
 /**
- * One unit of work for a handler: the user-supplied `action` body plus
- * the alert event the orchestrator resolved.
+ * One unit of work for a handler. Carries everything the handler needs
+ * to build a {@link PreparedAction}:
+ *
+ * - `action` — the user-supplied body (already narrowed to `TBody`).
+ * - `alertEvent` — the alert event the orchestrator resolved for this
+ *   row.
+ * - `alertActionDoc` — the audit doc the orchestrator has already built
+ *   from `action` + `alertEvent`. Handlers pass it through unchanged
+ *   for audit-only actions, or wrap it alongside a synthetic
+ *   `.rule-events` doc for lifecycle actions.
  */
 export interface HandlerItem<TBody extends CreateAlertActionBody> {
   action: TBody;
   alertEvent: AlertEventRecord;
-}
-
-/**
- * Per-item context the orchestrator hands to `prepare`. Everything in
- * here is already resolved — the handler never does I/O.
- *
- * Kept as a struct (rather than passing `alertActionDoc` positionally)
- * so future orchestrator-derived inputs can be added without
- * rippling through every handler signature.
- */
-export interface HandlerPrepareContext {
   alertActionDoc: AlertAction;
 }
 
@@ -69,5 +66,5 @@ export interface ActionHandler<TBody extends CreateAlertActionBody = CreateAlert
    * bulk path catches 400/404 and silent-skips, the single path lets
    * them propagate. No I/O — everything needed is already on `item`.
    */
-  prepare(item: HandlerItem<TBody>, ctx: HandlerPrepareContext): PreparedAction;
+  prepare(item: HandlerItem<TBody>): PreparedAction;
 }
