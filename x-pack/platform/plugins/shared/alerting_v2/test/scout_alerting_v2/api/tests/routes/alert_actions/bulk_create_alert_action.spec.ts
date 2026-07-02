@@ -7,7 +7,6 @@
 
 import { expect } from '@kbn/scout/api';
 import type { RoleApiCredentials } from '@kbn/scout';
-import type { AlertAction } from '../../../../../../server/resources/datastreams/alert_actions';
 import {
   ALERTING_V2_ALERTS_ALL_ROLE,
   ALERTING_V2_ALERTS_READ_ROLE,
@@ -17,31 +16,6 @@ import {
   NO_ACCESS_ROLE,
   testData,
 } from '../../../fixtures';
-
-const buildAuditAction = (input: {
-  ruleId: string;
-  groupHash: string;
-  episodeId: string;
-  actionType: AlertAction['action_type'];
-  reason?: string;
-  timestamp: string;
-}): AlertAction => ({
-  '@timestamp': input.timestamp,
-  actor: 'elastic',
-  action_type: input.actionType,
-  last_series_event_timestamp: input.timestamp,
-  rule_id: input.ruleId,
-  group_hash: input.groupHash,
-  episode_id: input.episodeId,
-  space_id: 'default',
-  ...(input.reason ? { reason: input.reason } : {}),
-});
-
-/** Returns ISO timestamps separated by `stepMs`, ordered earliest first. */
-const buildTimestampSequence = (stepMs: number, count: number): string[] => {
-  const baseMs = Date.now() - stepMs * count;
-  return Array.from({ length: count }, (_, i) => new Date(baseMs + i * stepMs).toISOString());
-};
 
 apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classic' }, () => {
   let writerCredentials: RoleApiCredentials;
@@ -288,40 +262,20 @@ apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classi
   );
 
   apiTest(
-    'lifecycle: bulk activate restores episode.status to the pre-deactivate state',
+    'lifecycle: bulk activate writes the synthetic .rule-events doc and flips episode.status to active + breached',
     async ({ apiClient, apiServices }) => {
       const ruleId = 'bulk-activate-rule';
       const groupHash = 'bulk-activate-group';
       const episodeId = 'bulk-activate-episode';
-      const [preDeactivateTs, deactivateTs] = buildTimestampSequence(1_000, 2);
 
       await apiServices.alertingV2.ruleEvents.seed([
         buildAlertEvent({
-          '@timestamp': preDeactivateTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'breached',
-          source: 'engine-x',
-          type: 'alert',
-          episode: { id: episodeId, status: 'active' },
-        }),
-        buildAlertEvent({
-          '@timestamp': deactivateTs,
           rule: { id: ruleId, version: 1 },
           group_hash: groupHash,
           status: 'recovered',
           source: 'engine-x',
           type: 'alert',
           episode: { id: episodeId, status: 'inactive' },
-        }),
-      ]);
-      await apiServices.alertingV2.alertActions.seed([
-        buildAuditAction({
-          ruleId,
-          groupHash,
-          episodeId,
-          actionType: 'deactivate',
-          timestamp: deactivateTs,
         }),
       ]);
 
@@ -345,6 +299,9 @@ apiTest.describe('Bulk create alert actions API', { tag: '@local-stateful-classi
         reason: 'bulk activate',
       });
 
+      // The synthetic activate doc propagates `source` from the current
+      // alert event (the seeded inactive doc from a prior recovery),
+      // so the reopened event stays consistent with the alert lineage.
       const latestStates = await apiServices.alertingV2.ruleEvents.getLatestEpisodeStates(ruleId);
       expect(latestStates.get(groupHash)).toMatchObject({
         rule: { id: ruleId },

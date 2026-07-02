@@ -11,18 +11,11 @@ import {
   ALERTING_V2_ALERTS_ALL_ROLE,
   ALERTING_V2_ALERTS_READ_ROLE,
   apiTest,
-  buildAlertAction,
   buildAlertEvent,
   getActivateAlertActionUrl,
   NO_ACCESS_ROLE,
   testData,
 } from '../../../fixtures';
-
-/** Returns ISO timestamps separated by `stepMs`, ordered earliest first. */
-const buildTimestampSequence = (stepMs: number, count: number): string[] => {
-  const baseMs = Date.now() - stepMs * count;
-  return Array.from({ length: count }, (_, i) => new Date(baseMs + i * stepMs).toISOString());
-};
 
 apiTest.describe('Create activate alert action API', { tag: '@local-stateful-classic' }, () => {
   let writerCredentials: RoleApiCredentials;
@@ -50,33 +43,14 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
       const groupHash = 'activate-happy-group';
       const episodeId = 'activate-happy-episode';
       const reason = 'reopen this';
-      const [preDeactivateTs, deactivateTs] = buildTimestampSequence(1_000, 2);
 
       await apiServices.alertingV2.ruleEvents.seed([
         buildAlertEvent({
-          '@timestamp': preDeactivateTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'breached',
-          type: 'alert',
-          episode: { id: episodeId, status: 'active' },
-        }),
-        buildAlertEvent({
-          '@timestamp': deactivateTs,
           rule: { id: ruleId, version: 1 },
           group_hash: groupHash,
           status: 'recovered',
           type: 'alert',
           episode: { id: episodeId, status: 'inactive' },
-        }),
-      ]);
-      await apiServices.alertingV2.alertActions.seed([
-        buildAlertAction({
-          '@timestamp': deactivateTs,
-          action_type: 'deactivate',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: episodeId,
         }),
       ]);
 
@@ -102,26 +76,19 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
   );
 
   apiTest(
-    'activate: restores the pre-deactivate lifecycle state into a synthetic .rule-events doc',
+    'activate: writes a synthetic .rule-events doc that flips the episode back to active + breached',
     async ({ apiClient, apiServices }) => {
+      // The synthetic doc always carries `status: breached` +
+      // `episode.status: active`, `@timestamp: now`, and reuses
+      // `episode.id` (reopen = incident continuity). Other fields
+      // (rule.version, data, severity, space_id) are propagated from
+      // the current alert event.
       const ruleId = 'activate-rule-event-rule';
       const groupHash = 'activate-rule-event-group';
       const episodeId = 'activate-rule-event-episode';
-      const [preDeactivateTs, deactivateTs] = buildTimestampSequence(1_000, 2);
 
       await apiServices.alertingV2.ruleEvents.seed([
         buildAlertEvent({
-          '@timestamp': preDeactivateTs,
-          rule: { id: ruleId, version: 7 },
-          group_hash: groupHash,
-          status: 'breached',
-          type: 'alert',
-          data: { 'host.name': 'host-a' },
-          severity: 'high',
-          episode: { id: episodeId, status: 'active' },
-        }),
-        buildAlertEvent({
-          '@timestamp': deactivateTs,
           rule: { id: ruleId, version: 7 },
           group_hash: groupHash,
           status: 'recovered',
@@ -131,15 +98,6 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
           episode: { id: episodeId, status: 'inactive' },
         }),
       ]);
-      await apiServices.alertingV2.alertActions.seed([
-        buildAlertAction({
-          '@timestamp': deactivateTs,
-          action_type: 'deactivate',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: episodeId,
-        }),
-      ]);
 
       const response = await apiClient.post(getActivateAlertActionUrl(groupHash), {
         headers: writerHeaders,
@@ -147,16 +105,14 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
       });
       expect(response).toHaveStatusCode(204);
 
-      // Three rule events exist now: pre-deactivate (active), deactivate-synthetic
-      // (inactive) and the new restored event (active). The restored doc reuses
-      // the same `episode.id` and the engine-observed status that preceded
-      // deactivate, with `@timestamp` advanced to now.
-      const restored = await apiServices.alertingV2.ruleEvents.find(ruleId, {
+      // Two rule events exist now: the seeded inactive event and the
+      // new activate-synthetic (active/breached).
+      const activeBreached = await apiServices.alertingV2.ruleEvents.find(ruleId, {
         status: 'breached',
         type: 'alert',
         episodeStatus: 'active',
       });
-      expect(restored).toHaveLength(2);
+      expect(activeBreached).toHaveLength(1);
 
       const latestStates = await apiServices.alertingV2.ruleEvents.getLatestEpisodeStates(ruleId);
       expect(latestStates.get(groupHash)).toMatchObject({
@@ -168,67 +124,6 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         data: { 'host.name': 'host-a' },
         severity: 'high',
         space_id: 'default',
-      });
-    }
-  );
-
-  apiTest(
-    'activate: restores recovering with status_count when the pre-deactivate state was recovering',
-    async ({ apiClient, apiServices }) => {
-      const ruleId = 'activate-recovering-rule';
-      const groupHash = 'activate-recovering-group';
-      const episodeId = 'activate-recovering-episode';
-      const [activeTs, recoveringTs, deactivateTs] = buildTimestampSequence(1_000, 3);
-
-      await apiServices.alertingV2.ruleEvents.seed([
-        // The episode breached, then started recovering with status_count = 2
-        // (e.g. two recovered observations against a recovering_count=5 window),
-        // then the user deactivated mid-recovery.
-        buildAlertEvent({
-          '@timestamp': activeTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'breached',
-          type: 'alert',
-          episode: { id: episodeId, status: 'active' },
-        }),
-        buildAlertEvent({
-          '@timestamp': recoveringTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'recovered',
-          type: 'alert',
-          episode: { id: episodeId, status: 'recovering', status_count: 2 },
-        }),
-        buildAlertEvent({
-          '@timestamp': deactivateTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'recovered',
-          type: 'alert',
-          episode: { id: episodeId, status: 'inactive' },
-        }),
-      ]);
-      await apiServices.alertingV2.alertActions.seed([
-        buildAlertAction({
-          '@timestamp': deactivateTs,
-          action_type: 'deactivate',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: episodeId,
-        }),
-      ]);
-
-      const response = await apiClient.post(getActivateAlertActionUrl(groupHash), {
-        headers: writerHeaders,
-        body: { reason: 'reopen mid-recovery' },
-      });
-      expect(response).toHaveStatusCode(204);
-
-      const latestStates = await apiServices.alertingV2.ruleEvents.getLatestEpisodeStates(ruleId);
-      expect(latestStates.get(groupHash)).toMatchObject({
-        episode: { id: episodeId, status: 'recovering', status_count: 2 },
-        status: 'recovered',
       });
     }
   );
@@ -282,11 +177,11 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
   });
 
   apiTest(
-    'precondition: rejects activate when the latest event is still active (no superseding episode)',
+    'precondition: rejects activate when the episode is not inactive',
     async ({ apiClient, apiServices }) => {
-      const ruleId = 'activate-still-active-rule';
-      const groupHash = 'activate-still-active-group';
-      const episodeId = 'activate-still-active-episode';
+      const ruleId = 'activate-not-inactive-rule';
+      const groupHash = 'activate-not-inactive-group';
+      const episodeId = 'activate-not-inactive-episode';
 
       await apiServices.alertingV2.ruleEvents.seed([
         buildAlertEvent({
@@ -317,68 +212,14 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
   );
 
   apiTest(
-    'precondition: rejects activate when a newer episode has superseded the deactivated one',
+    'activate: allows reopen of a naturally-recovered (never user-deactivated) episode',
     async ({ apiClient, apiServices }) => {
-      // Scenario: user deactivates episode-A → rule re-breaches → engine starts
-      // a new episode-B → user clicks activate. The latest .rule-events doc for
-      // the group_hash now belongs to episode-B (status: active), so activate
-      // must reject; the user should engage with the new episode instead.
-      const ruleId = 'activate-superseded-rule';
-      const groupHash = 'activate-superseded-group';
-      const oldEpisodeId = 'activate-superseded-episode-old';
-      const newEpisodeId = 'activate-superseded-episode-new';
-      const [activeTs, deactivateTs, rebreachTs] = buildTimestampSequence(1_000, 3);
-
-      await apiServices.alertingV2.ruleEvents.seed([
-        buildAlertEvent({
-          '@timestamp': activeTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'breached',
-          type: 'alert',
-          episode: { id: oldEpisodeId, status: 'active' },
-        }),
-        buildAlertEvent({
-          '@timestamp': deactivateTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'recovered',
-          type: 'alert',
-          episode: { id: oldEpisodeId, status: 'inactive' },
-        }),
-        buildAlertEvent({
-          '@timestamp': rebreachTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'breached',
-          type: 'alert',
-          episode: { id: newEpisodeId, status: 'active' },
-        }),
-      ]);
-      await apiServices.alertingV2.alertActions.seed([
-        buildAlertAction({
-          '@timestamp': deactivateTs,
-          action_type: 'deactivate',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: oldEpisodeId,
-        }),
-      ]);
-
-      const response = await apiClient.post(getActivateAlertActionUrl(groupHash), {
-        headers: writerHeaders,
-        body: { reason: 'reopen' },
-      });
-      expect(response).toHaveStatusCode(400);
-    }
-  );
-
-  apiTest(
-    'precondition: rejects activate of a naturally-recovered (never user-deactivated) episode',
-    async ({ apiClient, apiServices }) => {
-      // The episode reached `inactive` through the normal FSM (no deactivate
-      // audit row exists). There is nothing to invert; reject so the user
-      // doesn't accidentally re-open an episode the engine itself closed.
+      // The episode reached `inactive` through the normal FSM — no
+      // deactivate audit row exists. Users can still reopen it: the
+      // contract is "any inactive episode is reactivatable", regardless
+      // of how it got there (user deactivate vs engine recovery). This
+      // gives users agency to reopen alerts the engine closed
+      // prematurely, without having to distinguish origin.
       const ruleId = 'activate-natural-recovery-rule';
       const groupHash = 'activate-natural-recovery-group';
       const episodeId = 'activate-natural-recovery-episode';
@@ -397,104 +238,6 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         headers: writerHeaders,
         body: { reason: 'reopen' },
       });
-      expect(response).toHaveStatusCode(400);
-    }
-  );
-
-  apiTest(
-    'precondition: rejects double-activate when the latest action is already activate',
-    async ({ apiClient, apiServices }) => {
-      const ruleId = 'activate-double-rule';
-      const groupHash = 'activate-double-group';
-      const episodeId = 'activate-double-episode';
-      const [deactivateTs, activateTs] = buildTimestampSequence(1_000, 2);
-
-      await apiServices.alertingV2.ruleEvents.seed([
-        buildAlertEvent({
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'recovered',
-          type: 'alert',
-          episode: { id: episodeId, status: 'inactive' },
-        }),
-      ]);
-      await apiServices.alertingV2.alertActions.seed([
-        buildAlertAction({
-          '@timestamp': deactivateTs,
-          action_type: 'deactivate',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: episodeId,
-        }),
-        buildAlertAction({
-          '@timestamp': activateTs,
-          action_type: 'activate',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: episodeId,
-        }),
-      ]);
-
-      const response = await apiClient.post(getActivateAlertActionUrl(groupHash), {
-        headers: writerHeaders,
-        body: { reason: 'reopen again' },
-      });
-      expect(response).toHaveStatusCode(400);
-    }
-  );
-
-  apiTest(
-    'precondition: allows activate when a non-lifecycle action (tag) was applied between deactivate and activate',
-    async ({ apiClient, apiServices }) => {
-      // Non-lifecycle actions (tag/ack/assign/snooze/...) must not block a
-      // legitimate reopen of a user-deactivated episode. The lifecycle-only
-      // filter on the precondition query ignores the intervening `tag` row,
-      // so the latest lifecycle action remains `deactivate`.
-      const ruleId = 'activate-tag-then-reopen-rule';
-      const groupHash = 'activate-tag-then-reopen-group';
-      const episodeId = 'activate-tag-then-reopen-episode';
-      const [preDeactivateTs, deactivateTs, tagTs] = buildTimestampSequence(1_000, 3);
-
-      await apiServices.alertingV2.ruleEvents.seed([
-        buildAlertEvent({
-          '@timestamp': preDeactivateTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'breached',
-          type: 'alert',
-          episode: { id: episodeId, status: 'active' },
-        }),
-        buildAlertEvent({
-          '@timestamp': deactivateTs,
-          rule: { id: ruleId, version: 1 },
-          group_hash: groupHash,
-          status: 'recovered',
-          type: 'alert',
-          episode: { id: episodeId, status: 'inactive' },
-        }),
-      ]);
-      await apiServices.alertingV2.alertActions.seed([
-        buildAlertAction({
-          '@timestamp': deactivateTs,
-          action_type: 'deactivate',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: episodeId,
-        }),
-        // User tags the deactivated episode — orthogonal to lifecycle.
-        buildAlertAction({
-          '@timestamp': tagTs,
-          action_type: 'tag',
-          rule_id: ruleId,
-          group_hash: groupHash,
-          episode_id: episodeId,
-        }),
-      ]);
-
-      const response = await apiClient.post(getActivateAlertActionUrl(groupHash), {
-        headers: writerHeaders,
-        body: { reason: 'reopen after tagging' },
-      });
       expect(response).toHaveStatusCode(204);
 
       const activateActions = await apiServices.alertingV2.alertActions.find({
@@ -502,6 +245,17 @@ apiTest.describe('Create activate alert action API', { tag: '@local-stateful-cla
         actionTypes: ['activate'],
       });
       expect(activateActions).toHaveLength(1);
+      expect(activateActions[0]).toMatchObject({
+        action_type: 'activate',
+        group_hash: groupHash,
+        episode_id: episodeId,
+      });
+
+      const latestStates = await apiServices.alertingV2.ruleEvents.getLatestEpisodeStates(ruleId);
+      expect(latestStates.get(groupHash)).toMatchObject({
+        episode: { id: episodeId, status: 'active' },
+        status: 'breached',
+      });
     }
   );
 
