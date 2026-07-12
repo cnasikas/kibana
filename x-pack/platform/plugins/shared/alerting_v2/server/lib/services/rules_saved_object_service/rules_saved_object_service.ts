@@ -62,7 +62,7 @@ interface RuleWriteResult {
   version?: string;
 }
 
-export interface FindIdsByQueryParams {
+export interface GetRuleIdsByQueryParams {
   filter?: string;
   search?: string;
   searchFields?: string[];
@@ -73,11 +73,6 @@ export interface CountByQueryParams {
   filter?: string;
   search?: string;
   searchFields?: string[];
-}
-
-export interface FindIdsByQueryResult {
-  ids: string[];
-  total: number;
 }
 
 export interface RulesSavedObjectServiceContract {
@@ -110,18 +105,18 @@ export interface RulesSavedObjectServiceContract {
     saved_objects: Array<{ id: string; attributes: RuleSavedObjectAttributes; version?: string }>;
     total: number;
   }>;
-  findIdsByQuery(params: FindIdsByQueryParams): Promise<FindIdsByQueryResult>;
+  getRuleIdsByQuery(params: GetRuleIdsByQueryParams): Promise<string[]>;
   countByQuery(params: CountByQueryParams): Promise<number>;
   findTags(params?: { filter?: string }): Promise<string[]>;
   getTotalScheduledPerMinute(): Promise<number>;
 }
 
 /**
- * Page size used by the PIT-based `findIdsByQuery`. Larger pages reduce the
+ * Page size used by the PIT-based `getRuleIdsByQuery`. Larger pages reduce the
  * number of round trips (a scan of ~10k rules completes in ~10 requests) while
  * staying well within the response-payload limits of the SO client.
  */
-const FIND_IDS_BY_QUERY_PAGE_SIZE = 1000;
+const GET_RULE_IDS_BY_QUERY_PAGE_SIZE = 1000;
 
 @injectable()
 export class RulesSavedObjectService implements RulesSavedObjectServiceContract {
@@ -309,21 +304,28 @@ export class RulesSavedObjectService implements RulesSavedObjectServiceContract 
     });
   }
 
-  public async findIdsByQuery({
+  /**
+   * Streams rule ids matching the given filter/search through a PIT finder,
+   * stopping after `maxItems` ids. Deliberately does NOT count total matches
+   * — callers that need the count should call {@link countByQuery} first and
+   * use its result to decide whether streaming is worth it (e.g. skip when
+   * `total === 0`, reject before streaming when `total` exceeds a domain cap).
+   * Keeping count and stream separate lets rejects short-circuit without
+   * opening the PIT.
+   */
+  public async getRuleIdsByQuery({
     filter,
     search,
     searchFields,
     maxItems,
-  }: FindIdsByQueryParams): Promise<FindIdsByQueryResult> {
-    const total = await this.countByQuery({ filter, search, searchFields });
-
-    if (total === 0 || maxItems === 0) {
-      return { ids: [], total };
+  }: GetRuleIdsByQueryParams): Promise<string[]> {
+    if (maxItems === 0) {
+      return [];
     }
 
     const finder = this.client.createPointInTimeFinder<RuleSavedObjectAttributes>({
       type: RULE_SAVED_OBJECT_TYPE,
-      perPage: FIND_IDS_BY_QUERY_PAGE_SIZE,
+      perPage: GET_RULE_IDS_BY_QUERY_PAGE_SIZE,
       ...(filter ? { filter } : {}),
       ...(search ? { search, searchFields, defaultSearchOperator: 'AND' as const } : {}),
     });
@@ -336,7 +338,7 @@ export class RulesSavedObjectService implements RulesSavedObjectServiceContract 
           ids.push(doc.id);
 
           if (ids.length >= maxItems) {
-            return { ids, total };
+            return ids;
           }
         }
       }
@@ -344,7 +346,7 @@ export class RulesSavedObjectService implements RulesSavedObjectServiceContract 
       await finder.close();
     }
 
-    return { ids, total };
+    return ids;
   }
 
   public async countByQuery({ filter, search, searchFields }: CountByQueryParams): Promise<number> {

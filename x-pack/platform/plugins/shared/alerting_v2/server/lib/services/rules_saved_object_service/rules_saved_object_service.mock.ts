@@ -39,7 +39,7 @@ export function createRulesSavedObjectServiceMock(): RulesSavedObjectServiceMock
     delete: jest.fn().mockResolvedValue(undefined),
     bulkDelete: jest.fn().mockResolvedValue([]),
     find: jest.fn().mockResolvedValue({ saved_objects: [], total: 0 }),
-    findIdsByQuery: jest.fn().mockResolvedValue({ ids: [], total: 0 }),
+    getRuleIdsByQuery: jest.fn().mockResolvedValue([]),
     countByQuery: jest.fn().mockResolvedValue(0),
     findTags: jest.fn().mockResolvedValue([]),
     getTotalScheduledPerMinute: jest.fn().mockResolvedValue(0),

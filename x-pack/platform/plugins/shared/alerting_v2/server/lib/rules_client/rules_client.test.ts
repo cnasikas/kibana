@@ -1495,42 +1495,49 @@ describe('RulesClient', () => {
         const client = createClient();
         const totalMatches = BULK_QUERY_SAMPLE_SIZE + 10;
         const cappedIds = Array.from({ length: BULK_QUERY_SAMPLE_SIZE }, (_, i) => `dry-${i}`);
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-          ids: cappedIds,
-          total: totalMatches,
-        });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(totalMatches);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(cappedIds);
 
         const res = await client.deleteRulesByQuery({ match_all: true });
 
+        expect(rulesSavedObjectService.getRuleIdsByQuery).toHaveBeenCalledWith(
+          expect.objectContaining({ maxItems: BULK_QUERY_SAMPLE_SIZE })
+        );
         expect(rulesSavedObjectService.bulkDelete).not.toHaveBeenCalled();
         expect(taskManager.bulkRemove).not.toHaveBeenCalled();
         expect(res).toEqual({ match_count: totalMatches, sample: cappedIds });
       });
 
-      it('threads the filter and search selectors through to the persistence layer', async () => {
+      it('skips the id stream on a dry-run when nothing matches', async () => {
         const client = createClient();
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-          ids: ['probe'],
-          total: 1,
-        });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(0);
+
+        const res = await client.deleteRulesByQuery({ match_all: true });
+
+        expect(rulesSavedObjectService.getRuleIdsByQuery).not.toHaveBeenCalled();
+        expect(res).toEqual({ match_count: 0, sample: [] });
+      });
+
+      it('threads the filter and search selectors through to both count and stream calls', async () => {
+        const client = createClient();
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(1);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(['probe']);
 
         await client.deleteRulesByQuery({ filter: 'enabled: true', search: 'prod' });
 
-        expect(rulesSavedObjectService.findIdsByQuery).toHaveBeenCalledWith(
-          expect.objectContaining({
-            filter: `${RULE_SAVED_OBJECT_TYPE}.attributes.enabled: true`,
-            search: 'prod*',
-            searchFields: ['metadata.name', 'metadata.description'],
-          })
-        );
+        const expectedQuery = expect.objectContaining({
+          filter: `${RULE_SAVED_OBJECT_TYPE}.attributes.enabled: true`,
+          search: 'prod*',
+          searchFields: ['metadata.name', 'metadata.description'],
+        });
+        expect(rulesSavedObjectService.countByQuery).toHaveBeenCalledWith(expectedQuery);
+        expect(rulesSavedObjectService.getRuleIdsByQuery).toHaveBeenCalledWith(expectedQuery);
       });
 
       it('executes the delete for all resolved ids when force is true', async () => {
         const client = createClient();
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-          ids: ['rule-a', 'rule-b'],
-          total: 2,
-        });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(2);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(['rule-a', 'rule-b']);
 
         getRuleExecutorTaskIdMock
           .mockReturnValueOnce('task:rule-a')
@@ -1543,17 +1550,21 @@ describe('RulesClient', () => {
 
         const res = await client.deleteRulesByQuery({ match_all: true, force: true });
 
+        expect(rulesSavedObjectService.getRuleIdsByQuery).toHaveBeenCalledWith(
+          expect.objectContaining({ maxItems: BULK_FILTER_MAX_RESOURCES })
+        );
         expect(rulesSavedObjectService.bulkDelete).toHaveBeenCalledWith(['rule-a', 'rule-b']);
         expect(taskManager.bulkRemove).toHaveBeenCalledWith(['task:rule-a', 'task:rule-b']);
         expect(res).toEqual({ affected_count: 2, errors: [] });
       });
 
-      it('returns a zero-affected response when the query matches nothing (force=true)', async () => {
+      it('returns a zero-affected response and skips the id stream when nothing matches (force=true)', async () => {
         const client = createClient();
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({ ids: [], total: 0 });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(0);
 
         const res = await client.deleteRulesByQuery({ match_all: true, force: true });
 
+        expect(rulesSavedObjectService.getRuleIdsByQuery).not.toHaveBeenCalled();
         expect(rulesSavedObjectService.bulkDelete).not.toHaveBeenCalled();
         expect(res).toEqual({ affected_count: 0, errors: [] });
       });
@@ -1562,10 +1573,8 @@ describe('RulesClient', () => {
     describe('enableRulesByQuery', () => {
       it('returns a dry-run preview when force is false', async () => {
         const client = createClient();
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-          ids: ['rule-1', 'rule-2'],
-          total: 2,
-        });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(2);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(['rule-1', 'rule-2']);
 
         const res = await client.enableRulesByQuery({ filter: 'enabled: false' });
 
@@ -1581,10 +1590,8 @@ describe('RulesClient', () => {
           enabled: false,
         });
 
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-          ids: ['rule-1'],
-          total: 1,
-        });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(1);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(['rule-1']);
 
         rulesSavedObjectService.bulkGetByIds.mockResolvedValueOnce([
           { id: 'rule-1', attributes: disabledAttrs, version: 'v1' },
@@ -1602,10 +1609,8 @@ describe('RulesClient', () => {
     describe('disableRulesByQuery', () => {
       it('returns a dry-run preview when force is false', async () => {
         const client = createClient();
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-          ids: ['rule-1'],
-          total: 1,
-        });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(1);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(['rule-1']);
 
         const res = await client.disableRulesByQuery({ filter: 'enabled: true' });
 
@@ -1621,10 +1626,8 @@ describe('RulesClient', () => {
           enabled: true,
         });
 
-        rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-          ids: ['rule-1'],
-          total: 1,
-        });
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(1);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(['rule-1']);
 
         rulesSavedObjectService.bulkGetByIds.mockResolvedValueOnce([
           { id: 'rule-1', attributes: enabledAttrs, version: 'v1' },
@@ -1642,33 +1645,92 @@ describe('RulesClient', () => {
       });
     });
 
-    it('caps executed deletes at BULK_FILTER_MAX_RESOURCES matching ids', async () => {
-      const client = createClient();
-      const cappedIds = Array.from(
-        { length: BULK_FILTER_MAX_RESOURCES },
-        (_, i) => `cap-rule-${i}`
-      );
-      rulesSavedObjectService.findIdsByQuery.mockResolvedValueOnce({
-        ids: cappedIds,
-        total: BULK_FILTER_MAX_RESOURCES + 42,
+    describe('over-cap requests (atomicity guarantee)', () => {
+      const overCapTotal = BULK_FILTER_MAX_RESOURCES + 42;
+
+      it('rejects deleteRulesByQuery with 400 without opening the id stream or mutating rules', async () => {
+        const client = createClient();
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(overCapTotal);
+
+        await expect(
+          client.deleteRulesByQuery({ match_all: true, force: true })
+        ).rejects.toMatchObject({
+          output: { statusCode: 400 },
+          data: {
+            code: 'BULK_QUERY_MATCH_LIMIT_EXCEEDED',
+            details: { match_count: overCapTotal, limit: BULK_FILTER_MAX_RESOURCES },
+          },
+        });
+
+        expect(rulesSavedObjectService.getRuleIdsByQuery).not.toHaveBeenCalled();
+        expect(rulesSavedObjectService.bulkDelete).not.toHaveBeenCalled();
+        expect(taskManager.bulkRemove).not.toHaveBeenCalled();
       });
 
-      rulesSavedObjectService.bulkDelete.mockResolvedValueOnce(
-        cappedIds.map((id) => ({ id, success: true as const }))
-      );
+      it('rejects enableRulesByQuery with 400 without opening the id stream or mutating rules', async () => {
+        const client = createClient();
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(overCapTotal);
 
-      const res = await client.deleteRulesByQuery({ match_all: true, force: true });
+        await expect(
+          client.enableRulesByQuery({ filter: 'enabled: false', force: true })
+        ).rejects.toMatchObject({
+          output: { statusCode: 400 },
+          data: {
+            code: 'BULK_QUERY_MATCH_LIMIT_EXCEEDED',
+            details: { match_count: overCapTotal, limit: BULK_FILTER_MAX_RESOURCES },
+          },
+        });
 
-      // findIdsByQuery is asked for at most BULK_FILTER_MAX_RESOURCES ids
-      // (via `maxItems`), so the cap flows straight through to bulkDelete.
-      expect(rulesSavedObjectService.findIdsByQuery).toHaveBeenCalledWith(
-        expect.objectContaining({ maxItems: BULK_FILTER_MAX_RESOURCES })
-      );
-      expect(rulesSavedObjectService.bulkDelete).toHaveBeenCalledTimes(1);
-      expect(rulesSavedObjectService.bulkDelete.mock.calls[0][0]).toHaveLength(
-        BULK_FILTER_MAX_RESOURCES
-      );
-      expect(res).toEqual({ affected_count: BULK_FILTER_MAX_RESOURCES, errors: [] });
+        expect(rulesSavedObjectService.getRuleIdsByQuery).not.toHaveBeenCalled();
+        expect(rulesSavedObjectService.bulkGetByIds).not.toHaveBeenCalled();
+        expect(rulesSavedObjectService.bulkUpdate).not.toHaveBeenCalled();
+        expect(taskManager.bulkSchedule).not.toHaveBeenCalled();
+      });
+
+      it('rejects disableRulesByQuery with 400 without opening the id stream or mutating rules', async () => {
+        const client = createClient();
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(overCapTotal);
+
+        await expect(
+          client.disableRulesByQuery({ filter: 'enabled: true', force: true })
+        ).rejects.toMatchObject({
+          output: { statusCode: 400 },
+          data: {
+            code: 'BULK_QUERY_MATCH_LIMIT_EXCEEDED',
+            details: { match_count: overCapTotal, limit: BULK_FILTER_MAX_RESOURCES },
+          },
+        });
+
+        expect(rulesSavedObjectService.getRuleIdsByQuery).not.toHaveBeenCalled();
+        expect(rulesSavedObjectService.bulkGetByIds).not.toHaveBeenCalled();
+        expect(rulesSavedObjectService.bulkUpdate).not.toHaveBeenCalled();
+        expect(taskManager.bulkDisable).not.toHaveBeenCalled();
+      });
+
+      it('executes when total equals the cap exactly (boundary is inclusive)', async () => {
+        const client = createClient();
+        const exactCapIds = Array.from(
+          { length: BULK_FILTER_MAX_RESOURCES },
+          (_, i) => `cap-rule-${i}`
+        );
+        rulesSavedObjectService.countByQuery.mockResolvedValueOnce(BULK_FILTER_MAX_RESOURCES);
+        rulesSavedObjectService.getRuleIdsByQuery.mockResolvedValueOnce(exactCapIds);
+
+        rulesSavedObjectService.bulkDelete.mockResolvedValueOnce(
+          exactCapIds.map((id) => ({ id, success: true as const }))
+        );
+
+        const res = await client.deleteRulesByQuery({ match_all: true, force: true });
+
+        expect(rulesSavedObjectService.getRuleIdsByQuery).toHaveBeenCalledWith(
+          expect.objectContaining({ maxItems: BULK_FILTER_MAX_RESOURCES })
+        );
+        expect(rulesSavedObjectService.bulkDelete).toHaveBeenCalledTimes(1);
+        expect(rulesSavedObjectService.bulkDelete.mock.calls[0][0]).toHaveLength(
+          BULK_FILTER_MAX_RESOURCES
+        );
+        expect(res).toEqual({ affected_count: BULK_FILTER_MAX_RESOURCES, errors: [] });
+      });
     });
   });
 
@@ -1814,6 +1876,22 @@ describe('RulesClient', () => {
           details: expect.objectContaining({
             field: 'nonsense_field',
           }),
+        },
+      });
+    });
+
+    it('attaches BULK_QUERY_MATCH_LIMIT_EXCEEDED code and match/limit details on an over-cap force request', async () => {
+      const client = createClient();
+      const overCapTotal = BULK_FILTER_MAX_RESOURCES + 1;
+      rulesSavedObjectService.countByQuery.mockResolvedValueOnce(overCapTotal);
+
+      await expect(
+        client.deleteRulesByQuery({ match_all: true, force: true })
+      ).rejects.toMatchObject({
+        output: { statusCode: 400 },
+        data: {
+          code: 'BULK_QUERY_MATCH_LIMIT_EXCEEDED',
+          details: { match_count: overCapTotal, limit: BULK_FILTER_MAX_RESOURCES },
         },
       });
     });

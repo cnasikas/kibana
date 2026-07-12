@@ -57,7 +57,6 @@ import type {
   BulkResponse,
   CreateRuleData,
   CreateRuleParams,
-  DryRunResponse,
   FindRulesParams,
   FindRulesResponse,
   FindRulesSortField,
@@ -578,26 +577,23 @@ export class RulesClient {
   }
 
   /**
-   * Resolves the rule ids a by-query bulk operation should touch. Streams
-   * matching ids through a PIT finder (bypassing the `index.max_result_window`
-   * ceiling and giving snapshot consistency vs. paged `find()`), stopping at
-   * {@link BULK_FILTER_MAX_RESOURCES}.
-   *
-   * The dry-run path calls this with a small `maxItems` cap so the sample
-   * response stays bounded regardless of how many rules match.
+   * Translates a by-query bulk request into the shape the saved-object service
+   * expects (SO filter + `search` + `searchFields`). Kept as its own helper so
+   * the two consumers below — {@link countByQuery} and {@link getRuleIdsByQuery}
+   * — always agree on the query they're issuing against the same index.
    */
-  private async resolveByQuery(
-    params: Pick<BulkByQueryParams, 'filter' | 'search' | 'match_all'>,
-    { maxItems }: { maxItems: number }
-  ): Promise<{ ids: string[]; total: number }> {
+  private buildSoQueryParams(params: Pick<BulkByQueryParams, 'filter' | 'search' | 'match_all'>): {
+    filter?: string;
+    search?: string;
+    searchFields?: string[];
+  } {
     const soFilter = params.filter ? buildRuleSoFilter(params.filter) : undefined;
     const search = buildSoSearch(params.search);
-    return this.rulesSavedObjectService.findIdsByQuery({
+    return {
       filter: soFilter,
       search,
       searchFields: search ? RULE_SEARCH_FIELDS : undefined,
-      maxItems,
-    });
+    };
   }
 
   /**
@@ -813,25 +809,61 @@ export class RulesClient {
   }
 
   /**
-   * By-query dispatcher shared by delete / enable / disable. Runs the resolver
-   * once (with a small cap for dry-run, {@link BULK_FILTER_MAX_RESOURCES} otherwise)
-   * and either returns the preview or delegates to the executor.
+   * By-query dispatcher shared by delete / enable / disable. Always issues a
+   * cheap `countByQuery` first (a `perPage: 0` aggregation, no doc streaming)
+   * and only opens the PIT-based id stream when it's actually needed:
+   *
+   *  - dry-run: skip the stream entirely if nothing matches; otherwise stream
+   *    up to {@link BULK_QUERY_SAMPLE_SIZE} ids for the preview.
+   *  - force: if the count exceeds {@link BULK_FILTER_MAX_RESOURCES}, reject
+   *    before touching a single rule (atomicity-like guarantee — all-or-nothing);
+   *    if it's zero, skip the stream and hand the executor an empty list; only
+   *    otherwise pay for the PIT scan.
+   *
+   * Splitting count and stream avoids burning a full ~10k-doc PIT scan on
+   * requests we already know we're going to reject.
    */
   private async runByQuery(
     params: BulkByQueryParams,
     executor: (ids: string[]) => Promise<BulkResponse>
   ): Promise<BulkByQueryResult> {
     const force = params.force === true;
+    const soParams = this.buildSoQueryParams(params);
+
+    const total = await this.rulesSavedObjectService.countByQuery(soParams);
 
     if (!force) {
-      const { ids, total } = await this.resolveByQuery(params, {
+      if (total === 0) {
+        return { match_count: 0, sample: [] };
+      }
+
+      const sample = await this.rulesSavedObjectService.getRuleIdsByQuery({
+        ...soParams,
         maxItems: BULK_QUERY_SAMPLE_SIZE,
       });
-      const dryRun: DryRunResponse = { match_count: total, sample: ids };
-      return dryRun;
+
+      return { match_count: total, sample };
     }
 
-    const { ids } = await this.resolveByQuery(params, { maxItems: BULK_FILTER_MAX_RESOURCES });
+    if (total > BULK_FILTER_MAX_RESOURCES) {
+      throw Boom.badRequest(
+        `Filter matches ${total} rules, exceeding the maximum of ${BULK_FILTER_MAX_RESOURCES} per request. Narrow the filter or split the operation into multiple requests.`,
+        {
+          code: ALERTING_V2_ERROR_CODES.BULK_QUERY_MATCH_LIMIT_EXCEEDED,
+          details: { match_count: total, limit: BULK_FILTER_MAX_RESOURCES },
+        }
+      );
+    }
+
+    if (total === 0) {
+      return executor([]);
+    }
+
+    const ids = await this.rulesSavedObjectService.getRuleIdsByQuery({
+      ...soParams,
+      maxItems: BULK_FILTER_MAX_RESOURCES,
+    });
+
     return executor(ids);
   }
 

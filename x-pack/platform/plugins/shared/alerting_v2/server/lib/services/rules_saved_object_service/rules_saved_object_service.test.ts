@@ -124,22 +124,18 @@ describe('RulesSavedObjectService', () => {
     });
   });
 
-  describe('findIdsByQuery', () => {
+  describe('getRuleIdsByQuery', () => {
     /**
-     * Configures the SO client to (a) report `total` from the `countByQuery`
-     * (`perPage: 0` find) call and (b) yield the given `pages` from the
-     * PIT-based `createPointInTimeFinder`.
+     * Configures `createPointInTimeFinder` to yield the given pages.
      */
-    const stubFinder = (pages: string[][], total: number) => {
-      mockSavedObjectsClient.find.mockResolvedValueOnce(buildFindResponse({ total, per_page: 0 }));
-
+    const stubFinder = (pages: string[][]) => {
       const close = jest.fn().mockResolvedValue(undefined);
       const finder: ISavedObjectsPointInTimeFinder<unknown, unknown> = {
         find: async function* find() {
           for (const page of pages) {
             yield buildFindResponse({
               saved_objects: page.map((id) => buildFindResult(id)),
-              total,
+              total: page.length,
               per_page: page.length,
             });
           }
@@ -150,90 +146,58 @@ describe('RulesSavedObjectService', () => {
       return { close };
     };
 
-    it('short-circuits (no PIT opened) when total is 0', async () => {
-      mockSavedObjectsClient.find.mockResolvedValueOnce(
-        buildFindResponse({ total: 0, per_page: 0 })
-      );
+    it('returns [] without opening the PIT when maxItems is 0', async () => {
+      const result = await rulesSavedObjectService.getRuleIdsByQuery({ maxItems: 0 });
 
-      const result = await rulesSavedObjectService.findIdsByQuery({ maxItems: 100 });
-
-      expect(result).toEqual({ ids: [], total: 0 });
+      expect(result).toEqual([]);
       expect(mockSavedObjectsClient.createPointInTimeFinder).not.toHaveBeenCalled();
     });
 
-    it('short-circuits (no PIT opened) when maxItems is 0', async () => {
-      mockSavedObjectsClient.find.mockResolvedValueOnce(
-        buildFindResponse({ total: 5, per_page: 0 })
-      );
+    it('collects ids across pages', async () => {
+      const { close } = stubFinder([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]);
 
-      const result = await rulesSavedObjectService.findIdsByQuery({ maxItems: 0 });
+      const result = await rulesSavedObjectService.getRuleIdsByQuery({ maxItems: 100 });
 
-      expect(result).toEqual({ ids: [], total: 5 });
-      expect(mockSavedObjectsClient.createPointInTimeFinder).not.toHaveBeenCalled();
-    });
-
-    it('collects ids across pages and returns the total', async () => {
-      const { close } = stubFinder(
-        [
-          ['a', 'b'],
-          ['c', 'd'],
-        ],
-        4
-      );
-
-      const result = await rulesSavedObjectService.findIdsByQuery({ maxItems: 100 });
-
-      expect(result).toEqual({ ids: ['a', 'b', 'c', 'd'], total: 4 });
+      expect(result).toEqual(['a', 'b', 'c', 'd']);
       expect(close).toHaveBeenCalledTimes(1);
     });
 
     it('caps the returned ids at maxItems, mid-page if needed', async () => {
-      const { close } = stubFinder(
-        [
-          ['a', 'b'],
-          ['c', 'd', 'e', 'f'],
-        ],
-        6
-      );
+      const { close } = stubFinder([
+        ['a', 'b'],
+        ['c', 'd', 'e', 'f'],
+      ]);
 
-      const result = await rulesSavedObjectService.findIdsByQuery({ maxItems: 3 });
+      const result = await rulesSavedObjectService.getRuleIdsByQuery({ maxItems: 3 });
 
-      expect(result).toEqual({ ids: ['a', 'b', 'c'], total: 6 });
+      expect(result).toEqual(['a', 'b', 'c']);
       expect(close).toHaveBeenCalledTimes(1);
     });
 
     it('closes the finder even when the caller cap is reached before the last page', async () => {
-      const { close } = stubFinder(
-        [
-          ['a', 'b'],
-          ['c', 'd'],
-        ],
-        4
-      );
+      const { close } = stubFinder([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]);
 
-      await rulesSavedObjectService.findIdsByQuery({ maxItems: 2 });
+      await rulesSavedObjectService.getRuleIdsByQuery({ maxItems: 2 });
 
       expect(close).toHaveBeenCalledTimes(1);
     });
 
-    it('threads filter, search and searchFields through to both the count and the finder', async () => {
-      stubFinder([['a']], 1);
+    it('threads filter, search and searchFields through to the finder', async () => {
+      stubFinder([['a']]);
 
-      await rulesSavedObjectService.findIdsByQuery({
+      await rulesSavedObjectService.getRuleIdsByQuery({
         filter: `${RULE_SAVED_OBJECT_TYPE}.attributes.enabled: true`,
         search: 'prod',
         searchFields: ['metadata.name'],
         maxItems: 10,
       });
 
-      expect(mockSavedObjectsClient.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          filter: `${RULE_SAVED_OBJECT_TYPE}.attributes.enabled: true`,
-          search: 'prod',
-          searchFields: ['metadata.name'],
-          defaultSearchOperator: 'AND',
-        })
-      );
       expect(mockSavedObjectsClient.createPointInTimeFinder).toHaveBeenCalledWith(
         expect.objectContaining({
           filter: `${RULE_SAVED_OBJECT_TYPE}.attributes.enabled: true`,
