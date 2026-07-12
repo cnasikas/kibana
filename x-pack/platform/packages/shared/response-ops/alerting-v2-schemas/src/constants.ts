@@ -28,6 +28,16 @@ export const ID_MAX_LENGTH = 150;
 /** Maximum length for KQL/filter query strings (e.g. action policy matcher, bulk operation filter). */
 export const MAX_KQL_LENGTH = 4096;
 
+/** Maximum length for free-text search strings. */
+export const MAX_SEARCH_LENGTH = 1024;
+
+/**
+ * Maximum number of rule ids returned in the `sample` array of a by-query
+ * bulk operation dry-run response. Large enough for meaningful spot-checks,
+ * small enough to keep response payloads bounded.
+ */
+export const BULK_QUERY_SAMPLE_SIZE = 100;
+
 /** Maximum length for an Elasticsearch field name (e.g. `host.name`, `service.environment`). */
 export const MAX_FIELD_NAME_LENGTH = 256;
 
