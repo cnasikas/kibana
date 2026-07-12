@@ -62,6 +62,24 @@ interface RuleWriteResult {
   version?: string;
 }
 
+export interface FindIdsByQueryParams {
+  filter?: string;
+  search?: string;
+  searchFields?: string[];
+  maxItems: number;
+}
+
+export interface CountByQueryParams {
+  filter?: string;
+  search?: string;
+  searchFields?: string[];
+}
+
+export interface FindIdsByQueryResult {
+  ids: string[];
+  total: number;
+}
+
 export interface RulesSavedObjectServiceContract {
   create(params: { attrs: RuleSavedObjectAttributes; id?: string }): Promise<RuleWriteResult>;
   get(
@@ -92,9 +110,18 @@ export interface RulesSavedObjectServiceContract {
     saved_objects: Array<{ id: string; attributes: RuleSavedObjectAttributes; version?: string }>;
     total: number;
   }>;
+  findIdsByQuery(params: FindIdsByQueryParams): Promise<FindIdsByQueryResult>;
+  countByQuery(params: CountByQueryParams): Promise<number>;
   findTags(params?: { filter?: string }): Promise<string[]>;
   getTotalScheduledPerMinute(): Promise<number>;
 }
+
+/**
+ * Page size used by the PIT-based `findIdsByQuery`. Larger pages reduce the
+ * number of round trips (a scan of ~10k rules completes in ~10 requests) while
+ * staying well within the response-payload limits of the SO client.
+ */
+const FIND_IDS_BY_QUERY_PAGE_SIZE = 1000;
 
 @injectable()
 export class RulesSavedObjectService implements RulesSavedObjectServiceContract {
@@ -177,9 +204,7 @@ export class RulesSavedObjectService implements RulesSavedObjectServiceContract 
     const results: RulesFindAllResultItem[] = [];
     for await (const response of finder.find()) {
       for (const doc of response.saved_objects) {
-        if (!isSavedObjectErrorResult(doc)) {
-          results.push({ id: doc.id, attributes: doc.attributes, namespaces: doc.namespaces });
-        }
+        results.push({ id: doc.id, attributes: doc.attributes, namespaces: doc.namespaces });
       }
     }
     await finder.close();
@@ -282,6 +307,55 @@ export class RulesSavedObjectService implements RulesSavedObjectServiceContract 
       ...(filter ? { filter } : {}),
       ...(search ? { search, searchFields, defaultSearchOperator: 'AND' as const } : {}),
     });
+  }
+
+  public async findIdsByQuery({
+    filter,
+    search,
+    searchFields,
+    maxItems,
+  }: FindIdsByQueryParams): Promise<FindIdsByQueryResult> {
+    const total = await this.countByQuery({ filter, search, searchFields });
+
+    if (total === 0 || maxItems === 0) {
+      return { ids: [], total };
+    }
+
+    const finder = this.client.createPointInTimeFinder<RuleSavedObjectAttributes>({
+      type: RULE_SAVED_OBJECT_TYPE,
+      perPage: FIND_IDS_BY_QUERY_PAGE_SIZE,
+      ...(filter ? { filter } : {}),
+      ...(search ? { search, searchFields, defaultSearchOperator: 'AND' as const } : {}),
+    });
+
+    const ids: string[] = [];
+
+    try {
+      for await (const response of finder.find()) {
+        for (const doc of response.saved_objects) {
+          ids.push(doc.id);
+
+          if (ids.length >= maxItems) {
+            return { ids, total };
+          }
+        }
+      }
+    } finally {
+      await finder.close();
+    }
+
+    return { ids, total };
+  }
+
+  public async countByQuery({ filter, search, searchFields }: CountByQueryParams): Promise<number> {
+    const result = await this.client.find<RuleSavedObjectAttributes>({
+      type: RULE_SAVED_OBJECT_TYPE,
+      perPage: 0,
+      ...(filter ? { filter } : {}),
+      ...(search ? { search, searchFields, defaultSearchOperator: 'AND' as const } : {}),
+    });
+
+    return result.total;
   }
 
   /**
