@@ -8,7 +8,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { I18nProvider } from '@kbn/i18n-react';
-import { BULK_FILTER_MAX_RULES } from '@kbn/alerting-v2-schemas';
+import { BULK_FILTER_MAX_RESOURCES } from '@kbn/alerting-v2-schemas';
 import { RULE_KIND_TOOLTIPS } from '@kbn/alerting-v2-constants';
 import { RulesListTable, type RulesListTableProps } from './rules_list_table';
 
@@ -300,7 +300,7 @@ describe('RulesListTable', () => {
       renderTable({
         selectedCount: 1,
         isAllSelected: false,
-        totalItemCount: BULK_FILTER_MAX_RULES + 2000,
+        totalItemCount: BULK_FILTER_MAX_RESOURCES + 2000,
       });
 
       const btn = screen.getByTestId('selectAllRulesButton');
@@ -312,9 +312,9 @@ describe('RulesListTable', () => {
 
     it('shows disclosure only after select-all when total exceeds bulk cap', () => {
       renderTable({
-        selectedCount: BULK_FILTER_MAX_RULES,
+        selectedCount: BULK_FILTER_MAX_RESOURCES,
         isAllSelected: true,
-        totalItemCount: BULK_FILTER_MAX_RULES + 2000,
+        totalItemCount: BULK_FILTER_MAX_RESOURCES + 2000,
       });
 
       expect(screen.getByTestId('bulkActionsButton')).toHaveTextContent('Selected');

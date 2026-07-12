@@ -8,7 +8,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { I18nProvider } from '@kbn/i18n-react';
-import { BULK_FILTER_MAX_RULES } from '@kbn/alerting-v2-schemas';
+import { BULK_FILTER_MAX_RESOURCES } from '@kbn/alerting-v2-schemas';
 import { RulesListTableContainer } from './rules_list_table_container';
 
 const mockNavigateToUrl = jest.fn();
@@ -304,7 +304,7 @@ describe('RulesListTableContainer', () => {
       fireEvent.click(screen.getByTestId('bulkEnableRules'));
 
       expect(mockBulkEnableMutate).toHaveBeenCalledWith(
-        { ids: ['rule-1'] },
+        { mode: 'by_ids', ids: ['rule-1'] },
         expect.objectContaining({ onSuccess: expect.any(Function) })
       );
     });
@@ -315,7 +315,7 @@ describe('RulesListTableContainer', () => {
       fireEvent.click(screen.getByTestId('bulkDisableRules'));
 
       expect(mockBulkDisableMutate).toHaveBeenCalledWith(
-        { ids: ['rule-1'] },
+        { mode: 'by_ids', ids: ['rule-1'] },
         expect.objectContaining({ onSuccess: expect.any(Function) })
       );
     });
@@ -345,7 +345,7 @@ describe('RulesListTableContainer', () => {
       fireEvent.click(screen.getByTestId('confirmModalConfirmButton'));
 
       expect(mockBulkDeleteMutate).toHaveBeenCalledWith(
-        { ids: ['rule-1'] },
+        { mode: 'by_ids', ids: ['rule-1'] },
         expect.objectContaining({
           onSuccess: expect.any(Function),
           onError: expect.any(Function),
@@ -383,7 +383,7 @@ describe('RulesListTableContainer', () => {
     });
 
     it('shows "Select first {max}" when total count exceeds bulk cap', async () => {
-      renderContainer({ totalItemCount: BULK_FILTER_MAX_RULES + 500 });
+      renderContainer({ totalItemCount: BULK_FILTER_MAX_RESOURCES + 500 });
 
       const checkboxes = screen.getAllByRole('checkbox');
       fireEvent.click(checkboxes[1]);
@@ -398,7 +398,7 @@ describe('RulesListTableContainer', () => {
     });
 
     it('shows capped selection count and disclosure after select all over bulk cap', async () => {
-      renderContainer({ totalItemCount: BULK_FILTER_MAX_RULES + 500 });
+      renderContainer({ totalItemCount: BULK_FILTER_MAX_RESOURCES + 500 });
 
       const checkboxes = screen.getAllByRole('checkbox');
       fireEvent.click(checkboxes[1]);
@@ -445,7 +445,7 @@ describe('RulesListTableContainer', () => {
       fireEvent.click(screen.getByTestId('bulkEnableRules'));
 
       expect(mockBulkEnableMutate).toHaveBeenCalledWith(
-        { match_all: true },
+        { mode: 'by_query', match_all: true },
         expect.objectContaining({ onSuccess: expect.any(Function) })
       );
     });
@@ -475,7 +475,7 @@ describe('RulesListTableContainer', () => {
       fireEvent.click(screen.getByTestId('bulkEnableRules'));
 
       expect(mockBulkEnableMutate).toHaveBeenCalledWith(
-        { filter: '(kind: alert)' },
+        { mode: 'by_query', filter: '(kind: alert)' },
         expect.objectContaining({ onSuccess: expect.any(Function) })
       );
     });

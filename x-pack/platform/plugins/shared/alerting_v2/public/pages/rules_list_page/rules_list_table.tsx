@@ -31,7 +31,11 @@ import {
   type EuiBasicTableColumn,
 } from '@elastic/eui';
 import { css } from '@emotion/react';
-import { BULK_FILTER_MAX_RULES, getRootEsqlQuery, type RuleKind } from '@kbn/alerting-v2-schemas';
+import {
+  BULK_FILTER_MAX_RESOURCES,
+  getRootEsqlQuery,
+  type RuleKind,
+} from '@kbn/alerting-v2-schemas';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { i18n } from '@kbn/i18n';
 import { getIndexPatternFromESQLQuery } from '@kbn/esql-utils';
@@ -510,13 +514,13 @@ export const RulesListTable: React.FC<RulesListTableProps> = ({
                 />
               </EuiPopover>
             </EuiFlexItem>
-            {isAllSelected && totalItemCount > BULK_FILTER_MAX_RULES ? (
+            {isAllSelected && totalItemCount > BULK_FILTER_MAX_RESOURCES ? (
               <EuiFlexItem grow={false}>
                 <EuiText size="xs" color="subdued" data-test-subj="bulkSelectAllLimitDisclosure">
                   <FormattedMessage
                     id="xpack.alertingV2.rulesList.bulkSelectAllLimitDisclosure"
                     defaultMessage="Only the first {maxRules, number} rules can be selected for bulk actions."
-                    values={{ maxRules: BULK_FILTER_MAX_RULES }}
+                    values={{ maxRules: BULK_FILTER_MAX_RESOURCES }}
                   />
                 </EuiText>
               </EuiFlexItem>
@@ -529,11 +533,11 @@ export const RulesListTable: React.FC<RulesListTableProps> = ({
                   onClick={onSelectAll}
                   data-test-subj="selectAllRulesButton"
                 >
-                  {totalItemCount > BULK_FILTER_MAX_RULES ? (
+                  {totalItemCount > BULK_FILTER_MAX_RESOURCES ? (
                     <FormattedMessage
                       id="xpack.alertingV2.rulesList.selectFirstMaxRules"
                       defaultMessage="Select first {maxRules, number} rules"
-                      values={{ maxRules: BULK_FILTER_MAX_RULES }}
+                      values={{ maxRules: BULK_FILTER_MAX_RESOURCES }}
                     />
                   ) : (
                     <FormattedMessage
