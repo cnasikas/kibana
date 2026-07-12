@@ -8,13 +8,14 @@
 import { z } from '@kbn/zod/v4';
 
 import {
-  BULK_FILTER_MAX_RULES,
+  BULK_FILTER_MAX_RESOURCES,
   BULK_QUERY_SAMPLE_SIZE,
   ID_MAX_LENGTH,
   MAX_BULK_ITEMS,
   MAX_KQL_LENGTH,
   MAX_SEARCH_LENGTH,
 } from './constants';
+import { errorResponseSchema } from './error_response_schema';
 
 export const bulkByIdsSchema = z
   .object({
@@ -35,23 +36,25 @@ export const bulkByQuerySchema = z
       .max(MAX_KQL_LENGTH)
       .optional()
       .describe(
-        `KQL filter string to match rules. At most ${BULK_FILTER_MAX_RULES} matching rules are processed per request.`
+        `KQL filter string to match target resources. At most ${BULK_FILTER_MAX_RESOURCES} matching resources are processed per request.`
       ),
     search: z
       .string()
       .max(MAX_SEARCH_LENGTH)
       .optional()
-      .describe('Free-text search string to match rules by name and description.'),
+      .describe('Free-text search string matched against the resource-defined searchable fields.'),
     match_all: z
       .literal(true)
       .optional()
-      .describe('When true, targets every rule. Requires an explicit opt-in. Omitted by default.'),
+      .describe(
+        'When true, targets every resource. Requires an explicit opt-in. Omitted by default.'
+      ),
     force: z
       .boolean()
       .optional()
       .default(false)
       .describe(
-        'When true, executes the operation. When false (default), returns a dry-run preview with `match_count` and a `sample` of matching rule IDs so the client can verify before committing.'
+        'When true, executes the operation. When false (default), returns a dry-run preview with `match_count` and a `sample` of matching resource IDs so the client can verify before committing.'
       ),
   })
   .strict()
@@ -64,23 +67,31 @@ export const bulkByQuerySchema = z
 export type BulkByQueryParams = z.input<typeof bulkByQuerySchema>;
 
 /**
- * Error shape for a single rule that failed inside a bulk operation.
- * `code` is a stable, machine-readable identifier
- * (e.g. `RULE_NOT_FOUND`, `RULE_VERSION_CONFLICT`). See the alerting v2
- * error-code catalog on the server for the canonical list.
+ * Error shape for a single resource that failed inside a bulk operation.
+ *
+ * The nested `error` object reuses `errorResponseSchema` (the same shape
+ * returned by single-resource routes on failure) via `.pick`, minus the
+ * top-level `error` category label — inside a `200 OK` bulk response there
+ * is no HTTP status to mirror, and `code` already conveys the category
+ * machine-readably.
+ *
+ * `code` is a stable, machine-readable identifier scoped to the resource
+ * kind (e.g. `RULE_NOT_FOUND`, `ACTION_POLICY_VERSION_CONFLICT`). See the
+ * caller's error-code catalog on the server for the canonical list.
+ *
+ * `details` is optional structured context (e.g. per-field validation
+ * issues, the conflicting version, the resource id) that clients can
+ * surface without having to parse `message`.
  */
 const bulkErrorSchema = z.object({
-  id: z.string().describe('The identifier of the rule that failed.'),
-  error: z.object({
-    code: z.string().describe('Stable, machine-readable error code (e.g. RULE_NOT_FOUND).'),
-    message: z.string().describe('Human-readable error message.'),
-  }),
+  id: z.string().describe('The identifier of the resource that failed.'),
+  error: errorResponseSchema.pick({ code: true, message: true, details: true }),
 });
 
 /**
- * Response shape for an executed bulk operation. Identical across
- * bulk routes and the executed
- * (`force: true`) variant of each by-query endpoint.
+ * Response shape for an executed bulk operation. Identical across the
+ * by-ID bulk routes and the executed (`force: true`) variant of each
+ * by-query endpoint, regardless of the underlying resource kind.
  */
 export const bulkResponseSchema = z
   .object({
@@ -88,17 +99,17 @@ export const bulkResponseSchema = z
       .number()
       .int()
       .nonnegative()
-      .describe('Number of rules the operation successfully touched.'),
+      .describe('Number of resources the operation successfully touched.'),
     errors: z.array(bulkErrorSchema).describe('Errors encountered during the operation.'),
   })
-  .describe('Result of an executed bulk rule operation.');
+  .describe('Result of an executed bulk operation.');
 
 export type BulkResponse = z.infer<typeof bulkResponseSchema>;
 
 /**
  * Response shape for the dry-run (default) mode of the by-query endpoints.
  * Callers can inspect `match_count` and `sample` to confirm the query
- * targets the intended rules before re-sending with `force: true`.
+ * targets the intended resources before re-sending with `force: true`.
  */
 export const dryRunResponseSchema = z
   .object({
@@ -106,12 +117,12 @@ export const dryRunResponseSchema = z
       .number()
       .int()
       .nonnegative()
-      .describe('Total number of rules matching the query.'),
+      .describe('Total number of resources matching the query.'),
     sample: z
       .array(z.string())
       .max(BULK_QUERY_SAMPLE_SIZE)
       .describe(
-        `Sample of matching rule IDs (up to ${BULK_QUERY_SAMPLE_SIZE}) for spot-checking before executing.`
+        `Sample of matching resource IDs (up to ${BULK_QUERY_SAMPLE_SIZE}) for spot-checking before executing.`
       ),
   })
   .describe('Dry-run preview returned by a by-query bulk endpoint when `force` is false.');

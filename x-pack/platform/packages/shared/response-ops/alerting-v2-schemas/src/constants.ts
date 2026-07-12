@@ -16,8 +16,8 @@ export const MAX_DURATION = '365d';
 /** Minimum allowed interval for schedule.every */
 export const MIN_SCHEDULE_INTERVAL = '5s';
 
-/** Maximum rules processed in one filter-based bulk operation (select-all). */
-export const BULK_FILTER_MAX_RULES = 10_000;
+/** Maximum resources processed in one filter-based bulk operation (select-all). */
+export const BULK_FILTER_MAX_RESOURCES = 10_000;
 
 /**
  * Maximum length for entity identifiers (rule, action policy, episode, insight,
@@ -29,7 +29,7 @@ export const ID_MAX_LENGTH = 150;
 export const MAX_KQL_LENGTH = 4096;
 
 /** Maximum length for free-text search strings. */
-export const MAX_SEARCH_LENGTH = 1024;
+export const MAX_SEARCH_LENGTH = 256;
 
 /**
  * Maximum number of rule ids returned in the `sample` array of a by-query

@@ -134,6 +134,23 @@ describe('bulkResponseSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('accepts an error with an optional `details` payload for structured context', () => {
+    const parsed = bulkResponseSchema.safeParse({
+      affected_count: 0,
+      errors: [
+        {
+          id: 'a',
+          error: {
+            code: 'RULE_VERSION_CONFLICT',
+            message: 'Version conflict',
+            details: { expected_version: 'v1', actual_version: 'v2' },
+          },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it('rejects a response missing affected_count', () => {
     const parsed = bulkResponseSchema.safeParse({ errors: [] });
     expect(parsed.success).toBe(false);
