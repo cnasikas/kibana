@@ -123,6 +123,21 @@ describe('bulkByQuerySchema', () => {
     const parsed = bulkByQuerySchema.safeParse({ match_all: false });
     expect(parsed.success).toBe(false);
   });
+
+  it('rejects match_all combined with filter (mutual exclusion)', () => {
+    const parsed = bulkByQuerySchema.safeParse({ match_all: true, filter: 'kind: alert' });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects match_all combined with search (mutual exclusion)', () => {
+    const parsed = bulkByQuerySchema.safeParse({ match_all: true, search: 'prod' });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts filter and search together (they AND, not mutually exclusive)', () => {
+    const parsed = bulkByQuerySchema.safeParse({ filter: 'kind: alert', search: 'prod' });
+    expect(parsed.success).toBe(true);
+  });
 });
 
 describe('bulkResponseSchema', () => {

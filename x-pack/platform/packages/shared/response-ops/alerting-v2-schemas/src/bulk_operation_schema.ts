@@ -60,6 +60,9 @@ export const bulkByQuerySchema = z
   .strict()
   .refine((data) => data.filter != null || data.search != null || data.match_all === true, {
     message: 'At least one of filter, search, or match_all must be provided.',
+  })
+  .refine((data) => data.match_all !== true || (data.filter == null && data.search == null), {
+    message: '`match_all` cannot be combined with `filter` or `search`.',
   });
 
 // Use `z.input` so `force` (which has a `.default(false)`) is optional at the
