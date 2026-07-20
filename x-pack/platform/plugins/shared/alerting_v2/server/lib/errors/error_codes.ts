@@ -33,8 +33,6 @@ export const ALERTING_V2_ERROR_CODES = {
   INVALID_RULE_DATA: 'INVALID_RULE_DATA',
   /** `state_transition` cannot be applied to the rule's `kind`. */
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
-  /** Bulk rule operation params combine `ids` with `filter` / `search`. */
-  INVALID_BULK_PARAMS: 'INVALID_BULK_PARAMS',
   /**
    * A by-query bulk operation was submitted with `force: true` and the filter
    * matched more resources than a single request may process. Rejected before

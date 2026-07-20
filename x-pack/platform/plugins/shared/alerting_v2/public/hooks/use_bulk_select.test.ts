@@ -12,7 +12,7 @@ import { useBulkSelect } from './use_bulk_select';
 const pageItems = [{ id: 'rule-1' }];
 
 describe('useBulkSelect', () => {
-  it('caps selectedCount at BULK_FILTER_MAX_RESOURCES when select-all and total exceeds cap', () => {
+  it('reports the full logical count in select-all mode without an artificial cap', () => {
     const { result } = renderHook(() =>
       useBulkSelect({
         totalItemCount: BULK_FILTER_MAX_RESOURCES + 500,
@@ -25,10 +25,10 @@ describe('useBulkSelect', () => {
     });
 
     expect(result.current.isAllSelected).toBe(true);
-    expect(result.current.selectedCount).toBe(BULK_FILTER_MAX_RESOURCES);
+    expect(result.current.selectedCount).toBe(BULK_FILTER_MAX_RESOURCES + 500);
   });
 
-  it('does not cap selectedCount when total is at or below BULK_FILTER_MAX_RESOURCES', () => {
+  it('reports the logical count when total is at or below BULK_FILTER_MAX_RESOURCES', () => {
     const { result } = renderHook(() =>
       useBulkSelect({
         totalItemCount: BULK_FILTER_MAX_RESOURCES,
@@ -43,7 +43,7 @@ describe('useBulkSelect', () => {
     expect(result.current.selectedCount).toBe(BULK_FILTER_MAX_RESOURCES);
   });
 
-  it('uses logical count when exclusions bring match set below bulk cap', () => {
+  it('subtracts exclusions from the select-all logical count', () => {
     const { result } = renderHook(() =>
       useBulkSelect({
         totalItemCount: BULK_FILTER_MAX_RESOURCES + 1000,
@@ -54,7 +54,7 @@ describe('useBulkSelect', () => {
     act(() => {
       result.current.onSelectAll();
     });
-    expect(result.current.selectedCount).toBe(BULK_FILTER_MAX_RESOURCES);
+    expect(result.current.selectedCount).toBe(BULK_FILTER_MAX_RESOURCES + 1000);
 
     act(() => {
       for (let i = 0; i < 1500; i++) {

@@ -33,16 +33,22 @@ export const bulkByQuerySchema = z
   .object({
     filter: z
       .string()
+      .trim()
+      .min(1)
       .max(MAX_KQL_LENGTH)
       .optional()
       .describe(
-        `KQL filter string to match target resources. At most ${BULK_FILTER_MAX_RESOURCES} matching resources are processed per request.`
+        `KQL filter string to match target resources. At most ${BULK_FILTER_MAX_RESOURCES} matching resources are processed per request. Cannot be empty; to target every resource use \`match_all: true\`.`
       ),
     search: z
       .string()
+      .trim()
+      .min(1)
       .max(MAX_SEARCH_LENGTH)
       .optional()
-      .describe('Free-text search string matched against the resource-defined searchable fields.'),
+      .describe(
+        'Free-text search string matched against the resource-defined searchable fields. Cannot be empty; to target every resource use `match_all: true`.'
+      ),
     match_all: z
       .literal(true)
       .optional()
@@ -120,7 +126,9 @@ export const dryRunResponseSchema = z
       .number()
       .int()
       .nonnegative()
-      .describe('Total number of resources matching the query.'),
+      .describe(
+        `Total number of resources matching the query. A dry run never fails on size, but if this exceeds ${BULK_FILTER_MAX_RESOURCES}, re-sending the same query with \`force: true\` is rejected with \`BULK_QUERY_MATCH_LIMIT_EXCEEDED\`; narrow the query before executing.`
+      ),
     sample: z
       .array(z.string())
       .max(BULK_QUERY_SAMPLE_SIZE)

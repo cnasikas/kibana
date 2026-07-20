@@ -119,6 +119,38 @@ describe('bulkByQuerySchema', () => {
     expect(parsed.success).toBe(false);
   });
 
+  // An empty or whitespace-only filter/search would match every resource,
+  // becoming a second, implicit way to "match all" that bypasses the explicit
+  // `match_all: true` opt-in. Reject them so `match_all` stays the only path.
+  it('rejects an empty filter string', () => {
+    const parsed = bulkByQuerySchema.safeParse({ filter: '' });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects a whitespace-only filter string', () => {
+    const parsed = bulkByQuerySchema.safeParse({ filter: '   ' });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects an empty search string', () => {
+    const parsed = bulkByQuerySchema.safeParse({ search: '' });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects a whitespace-only search string', () => {
+    const parsed = bulkByQuerySchema.safeParse({ search: '   ' });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('trims surrounding whitespace from filter and search', () => {
+    const parsed = bulkByQuerySchema.safeParse({ filter: '  kind: alert  ', search: '  prod  ' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.filter).toBe('kind: alert');
+      expect(parsed.data.search).toBe('prod');
+    }
+  });
+
   it('rejects match_all: false (literal true only)', () => {
     const parsed = bulkByQuerySchema.safeParse({ match_all: false });
     expect(parsed.success).toBe(false);

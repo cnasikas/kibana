@@ -554,18 +554,17 @@ export const RulesListTable: React.FC<RulesListTableProps> = ({
                 />
               </EuiPopover>
             </EuiFlexItem>
-            {isAllSelected && totalItemCount > BULK_FILTER_MAX_RESOURCES ? (
+            {totalItemCount > BULK_FILTER_MAX_RESOURCES ? (
               <EuiFlexItem grow={false}>
                 <EuiText size="xs" color="subdued" data-test-subj="bulkSelectAllLimitDisclosure">
                   <FormattedMessage
                     id="xpack.alertingV2.rulesList.bulkSelectAllLimitDisclosure"
-                    defaultMessage="Only the first {maxRules, number} rules can be selected for bulk actions."
+                    defaultMessage="Bulk actions are limited to {maxRules, number} rules at a time. Narrow your filter to act on all matching rules."
                     values={{ maxRules: BULK_FILTER_MAX_RESOURCES }}
                   />
                 </EuiText>
               </EuiFlexItem>
-            ) : null}
-            {!isAllSelected ? (
+            ) : !isAllSelected ? (
               <EuiFlexItem grow={false}>
                 <EuiButtonEmpty
                   size="xs"
@@ -573,19 +572,11 @@ export const RulesListTable: React.FC<RulesListTableProps> = ({
                   onClick={onSelectAll}
                   data-test-subj="selectAllRulesButton"
                 >
-                  {totalItemCount > BULK_FILTER_MAX_RESOURCES ? (
-                    <FormattedMessage
-                      id="xpack.alertingV2.rulesList.selectFirstMaxRules"
-                      defaultMessage="Select first {maxRules, number} rules"
-                      values={{ maxRules: BULK_FILTER_MAX_RESOURCES }}
-                    />
-                  ) : (
-                    <FormattedMessage
-                      id="xpack.alertingV2.rulesList.selectAll"
-                      defaultMessage="Select all {total} {total, plural, one {rule} other {rules}}"
-                      values={{ total: totalItemCount }}
-                    />
-                  )}
+                  <FormattedMessage
+                    id="xpack.alertingV2.rulesList.selectAll"
+                    defaultMessage="Select all {total} {total, plural, one {rule} other {rules}}"
+                    values={{ total: totalItemCount }}
+                  />
                 </EuiButtonEmpty>
               </EuiFlexItem>
             ) : null}

@@ -297,21 +297,20 @@ describe('RulesListTable', () => {
       expect(screen.getByTestId('selectAllRulesButton')).toHaveTextContent('Select all 5 rules');
     });
 
-    it('shows "Select first {max} rules" without disclosure until select-all is active', () => {
+    it('replaces the select-all button with a narrow-filter disclosure when total exceeds the bulk cap', () => {
       renderTable({
         selectedCount: 1,
         isAllSelected: false,
         totalItemCount: BULK_FILTER_MAX_RESOURCES + 2000,
       });
 
-      const btn = screen.getByTestId('selectAllRulesButton');
-      expect(btn).toHaveTextContent('Select first');
-      expect(btn.textContent?.replace(/\s/g, '')).toMatch(/10,?000/);
+      expect(screen.queryByTestId('selectAllRulesButton')).not.toBeInTheDocument();
 
-      expect(screen.queryByTestId('bulkSelectAllLimitDisclosure')).not.toBeInTheDocument();
+      const disc = screen.getByTestId('bulkSelectAllLimitDisclosure');
+      expect(disc).toHaveTextContent('Narrow your filter');
     });
 
-    it('shows disclosure only after select-all when total exceeds bulk cap', () => {
+    it('keeps the disclosure and no select-all button when total exceeds the cap and all are selected', () => {
       renderTable({
         selectedCount: BULK_FILTER_MAX_RESOURCES,
         isAllSelected: true,
@@ -322,9 +321,9 @@ describe('RulesListTable', () => {
       expect(screen.getByTestId('bulkActionsButton').textContent?.replace(/\s/g, '')).toMatch(
         /10,?000/
       );
+      expect(screen.queryByTestId('selectAllRulesButton')).not.toBeInTheDocument();
       const disc = screen.getByTestId('bulkSelectAllLimitDisclosure');
-      expect(disc).toHaveTextContent('Only the first');
-      expect(disc.textContent?.replace(/\s/g, '')).toMatch(/10,?000/);
+      expect(disc).toHaveTextContent('Narrow your filter');
     });
 
     it('hides "Select all" button when all selected', () => {

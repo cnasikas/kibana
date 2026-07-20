@@ -582,7 +582,7 @@ export class RulesClient {
    * the two consumers below — {@link countByQuery} and {@link getRuleIdsByQuery}
    * — always agree on the query they're issuing against the same index.
    */
-  private buildSoQueryParams(params: Pick<BulkByQueryParams, 'filter' | 'search' | 'match_all'>): {
+  private buildSoQueryParams(params: Pick<BulkByQueryParams, 'filter' | 'search'>): {
     filter?: string;
     search?: string;
     searchFields?: string[];

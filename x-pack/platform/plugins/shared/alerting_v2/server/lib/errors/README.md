@@ -57,7 +57,6 @@ backwards compatible. Renaming or removing a code is a breaking change.
 | `RULE_VERSION_CONFLICT`       | 409    | An update / delete races another writer (`if_seq_no` mismatch)       | `{ rule_id }`                              |
 | `INVALID_RULE_DATA`           | 400    | The submitted body fails the domain-level schema check               | `{ context, errors }` (tree-shaped errors) |
 | `INVALID_STATE_TRANSITION`    | 400    | `state_transition` is incompatible with the rule's `kind`            | `{ rule_id, kind, transition }`            |
-| `INVALID_BULK_PARAMS`         | 400    | Bulk operation combines `ids` with `filter` / `search` / `match_all` | `{ params }`                               |
 | `BULK_QUERY_MATCH_LIMIT_EXCEEDED` | 400 | By-query bulk operation with `force: true` matched more resources than the per-request cap; rejected before any resource is mutated | `{ match_count, limit }`                   |
 | `IMMUTABLE_FIELDS_CHANGED`    | 400    | PUT (upsert) request changes a field flagged as immutable            | `{ fields }`                               |
 | `INVALID_FILTER_FIELD`        | 400    | The `filter` references a field that is not in the allow-list        | `{ field, allowed_fields }`                |

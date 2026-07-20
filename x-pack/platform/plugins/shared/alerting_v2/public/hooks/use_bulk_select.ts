@@ -6,7 +6,6 @@
  */
 
 import { useReducer, useMemo, useCallback } from 'react';
-import { BULK_FILTER_MAX_RESOURCES } from '@kbn/alerting-v2-schemas';
 import { escapeQuotes } from '@kbn/es-query';
 import type { BulkByIdsParams, BulkByQueryParams } from '../services/rules_api';
 
@@ -103,11 +102,7 @@ export const useBulkSelect = ({ totalItemCount, items, filter, search }: UseBulk
       return 0;
     }
     if (state.isAllSelected) {
-      const logical = totalItemCount - state.selectedIds.size;
-      if (totalItemCount > BULK_FILTER_MAX_RESOURCES) {
-        return Math.min(logical, BULK_FILTER_MAX_RESOURCES);
-      }
-      return logical;
+      return totalItemCount - state.selectedIds.size;
     }
     // Only IDs that are actually on the current page count
     return itemIds.filter((id) => state.selectedIds.has(id)).length;
