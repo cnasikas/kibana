@@ -592,7 +592,7 @@ export const RulesListTable: React.FC<RulesListTableProps> = ({
                           <span data-test-subj="bulkSelectAllLimitDisclosure">
                             <FormattedMessage
                               id="xpack.alertingV2.rulesList.bulkSelectAllLimitDisclosure"
-                              defaultMessage="Bulk actions are limited to {maxRules, number} rules at a time. Narrow your filter to act on all matching rules."
+                              defaultMessage="Select all is available only when {maxRules, number} or fewer rules match. Narrow your filter to select every matching rule."
                               values={{ maxRules: BULK_FILTER_MAX_RESOURCES }}
                             />
                           </span>

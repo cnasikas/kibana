@@ -318,11 +318,16 @@ describe('RulesListTable', () => {
       fireEvent.mouseOver(screen.getByTestId('bulkSelectAllLimitTooltip'));
 
       const disc = await screen.findByTestId('bulkSelectAllLimitDisclosure');
+      expect(disc).toHaveTextContent('Select all is available only when');
       expect(disc).toHaveTextContent('Narrow your filter');
     });
 
     it('enables Select all with no help tip when total is within the bulk cap', () => {
-      renderTable({ selectedCount: 1, isAllSelected: false, totalItemCount: 5 });
+      renderTable({
+        selectedCount: 1,
+        isAllSelected: false,
+        totalItemCount: BULK_FILTER_MAX_RESOURCES,
+      });
 
       expect(screen.getByTestId('selectAllRulesButton')).toBeEnabled();
       expect(screen.queryByTestId('bulkSelectAllLimitTooltip')).not.toBeInTheDocument();
