@@ -297,33 +297,35 @@ describe('RulesListTable', () => {
       expect(screen.getByTestId('selectAllRulesButton')).toHaveTextContent('Select all 5 rules');
     });
 
-    it('replaces the select-all button with a narrow-filter disclosure when total exceeds the bulk cap', () => {
+    it('disables Select all and shows a help tip when total exceeds the bulk cap', () => {
       renderTable({
         selectedCount: 1,
         isAllSelected: false,
         totalItemCount: BULK_FILTER_MAX_RESOURCES + 2000,
       });
 
-      expect(screen.queryByTestId('selectAllRulesButton')).not.toBeInTheDocument();
-
-      const disc = screen.getByTestId('bulkSelectAllLimitDisclosure');
-      expect(disc).toHaveTextContent('Narrow your filter');
+      expect(screen.getByTestId('selectAllRulesButton')).toBeDisabled();
+      expect(screen.getByTestId('bulkSelectAllLimitTooltip')).toBeInTheDocument();
     });
 
-    it('keeps the disclosure and no select-all button when total exceeds the cap and all are selected', () => {
+    it('explains the cap in the Select all help tip', async () => {
       renderTable({
-        selectedCount: BULK_FILTER_MAX_RESOURCES,
-        isAllSelected: true,
+        selectedCount: 1,
+        isAllSelected: false,
         totalItemCount: BULK_FILTER_MAX_RESOURCES + 2000,
       });
 
-      expect(screen.getByTestId('bulkActionsButton')).toHaveTextContent('Selected');
-      expect(screen.getByTestId('bulkActionsButton').textContent?.replace(/\s/g, '')).toMatch(
-        /10,?000/
-      );
-      expect(screen.queryByTestId('selectAllRulesButton')).not.toBeInTheDocument();
-      const disc = screen.getByTestId('bulkSelectAllLimitDisclosure');
+      fireEvent.mouseOver(screen.getByTestId('bulkSelectAllLimitTooltip'));
+
+      const disc = await screen.findByTestId('bulkSelectAllLimitDisclosure');
       expect(disc).toHaveTextContent('Narrow your filter');
+    });
+
+    it('enables Select all with no help tip when total is within the bulk cap', () => {
+      renderTable({ selectedCount: 1, isAllSelected: false, totalItemCount: 5 });
+
+      expect(screen.getByTestId('selectAllRulesButton')).toBeEnabled();
+      expect(screen.queryByTestId('bulkSelectAllLimitTooltip')).not.toBeInTheDocument();
     });
 
     it('hides "Select all" button when all selected', () => {

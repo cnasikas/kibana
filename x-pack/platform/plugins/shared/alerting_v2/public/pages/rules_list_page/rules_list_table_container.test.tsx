@@ -383,16 +383,15 @@ describe('RulesListTableContainer', () => {
       });
     });
 
-    it('replaces select-all with a narrow-filter disclosure when total exceeds bulk cap', async () => {
+    it('disables select-all and shows a help tip when total exceeds bulk cap', async () => {
       renderContainer({ totalItemCount: BULK_FILTER_MAX_RESOURCES + 500 });
 
       const checkboxes = screen.getAllByRole('checkbox');
       fireEvent.click(checkboxes[1]);
 
-      const disc = await screen.findByTestId('bulkSelectAllLimitDisclosure');
-      expect(disc).toHaveTextContent('Narrow your filter');
-
-      expect(screen.queryByTestId('selectAllRulesButton')).not.toBeInTheDocument();
+      const selectAll = await screen.findByTestId('selectAllRulesButton');
+      expect(selectAll).toBeDisabled();
+      expect(screen.getByTestId('bulkSelectAllLimitTooltip')).toBeInTheDocument();
     });
 
     it('still allows a by-ids bulk action on explicitly selected rows when total exceeds the cap', async () => {
@@ -402,7 +401,7 @@ describe('RulesListTableContainer', () => {
       fireEvent.click(checkboxes[1]);
 
       expect(await screen.findByTestId('bulkActionsButton')).toBeInTheDocument();
-      expect(screen.queryByTestId('selectAllRulesButton')).not.toBeInTheDocument();
+      expect(screen.getByTestId('selectAllRulesButton')).toBeDisabled();
 
       fireEvent.click(await screen.findByTestId('bulkActionsButton'));
 
