@@ -45,6 +45,19 @@ const buildAggregationResponse = (buckets: Array<{ key: string; doc_count: numbe
     aggregations: { schedule_intervals: { sum_other_doc_count: 0, buckets } },
   });
 
+interface MatchCountAggregations {
+  match_count: { value: number };
+}
+
+const buildMatchCountResponse = (value: number, total = value) =>
+  buildFindResponse<unknown, MatchCountAggregations>({
+    total,
+    per_page: 0,
+    aggregations: { match_count: { value } },
+  });
+
+const MATCH_COUNT_AGGS = { match_count: { value_count: { field: 'type' } } };
+
 describe('RulesSavedObjectService', () => {
   let rulesSavedObjectService: RulesSavedObjectService;
   let mockSavedObjectsClient: jest.Mocked<SavedObjectsClientContract>;
@@ -91,8 +104,8 @@ describe('RulesSavedObjectService', () => {
   });
 
   describe('countByQuery', () => {
-    it('returns the total from a perPage:0 find and threads the selectors through', async () => {
-      mockSavedObjectsClient.find.mockResolvedValue(buildFindResponse({ total: 42, per_page: 0 }));
+    it('returns the exact match count from the value_count aggregation and threads the selectors through', async () => {
+      mockSavedObjectsClient.find.mockResolvedValue(buildMatchCountResponse(42));
 
       const total = await rulesSavedObjectService.countByQuery({
         filter: `${RULE_SAVED_OBJECT_TYPE}.attributes.enabled: true`,
@@ -108,11 +121,12 @@ describe('RulesSavedObjectService', () => {
         search: 'prod*',
         searchFields: ['metadata.name'],
         defaultSearchOperator: 'AND',
+        aggs: MATCH_COUNT_AGGS,
       });
     });
 
     it('omits filter and search from the request when they are not provided', async () => {
-      mockSavedObjectsClient.find.mockResolvedValue(buildFindResponse({ total: 7, per_page: 0 }));
+      mockSavedObjectsClient.find.mockResolvedValue(buildMatchCountResponse(7));
 
       const total = await rulesSavedObjectService.countByQuery({});
 
@@ -120,6 +134,7 @@ describe('RulesSavedObjectService', () => {
       expect(mockSavedObjectsClient.find).toHaveBeenCalledWith({
         type: RULE_SAVED_OBJECT_TYPE,
         perPage: 0,
+        aggs: MATCH_COUNT_AGGS,
       });
     });
   });
