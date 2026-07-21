@@ -23,11 +23,7 @@ import {
 import { AppHeader } from '@kbn/app-header';
 import type { AppHeaderMenu } from '@kbn/app-header';
 import { css } from '@emotion/react';
-import type {
-  ActionPolicyBulkAction,
-  ActionPolicyResponse,
-  CreateActionPolicyData,
-} from '@kbn/alerting-v2-schemas';
+import type { ActionPolicyResponse, CreateActionPolicyData } from '@kbn/alerting-v2-schemas';
 import { CoreStart, useService } from '@kbn/core-di-browser';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
@@ -238,24 +234,14 @@ export const ListActionPoliciesPage = () => {
     snoozedUntil?: string
   ) => {
     const ids = selectedPolicies.map((policy) => policy.id);
-    let actions: ActionPolicyBulkAction[];
-    if (action === 'snooze' && snoozedUntil) {
-      actions = ids.map((id) => ({ id, action: 'snooze', snoozedUntil }));
-    } else if (action === 'enable') {
-      actions = ids.map((id) => ({ id, action: 'enable' }));
-    } else if (action === 'disable') {
-      actions = ids.map((id) => ({ id, action: 'disable' }));
-    } else if (action === 'unsnooze') {
-      actions = ids.map((id) => ({ id, action: 'unsnooze' }));
-    } else if (action === 'delete') {
-      actions = ids.map((id) => ({ id, action: 'delete' }));
-    } else if (action === 'update_api_key') {
-      actions = ids.map((id) => ({ id, action: 'update_api_key' }));
-    } else {
-      throw new Error(`Invalid action: ${action}`);
-    }
 
-    bulkAction({ actions }, { onSuccess: clearSelection });
+    // The snooze popover always supplies a date; if it is somehow missing we
+    // silently skip rather than surface a cryptic error the user can't act on.
+    if (action === 'snooze' && snoozedUntil) {
+      bulkAction({ action, ids, snoozedUntil }, { onSuccess: clearSelection });
+    } else if (action !== 'snooze') {
+      bulkAction({ action, ids }, { onSuccess: clearSelection });
+    }
   };
 
   const onSelectionChange = (newSelectedItems: ActionPolicyResponse[]) => {

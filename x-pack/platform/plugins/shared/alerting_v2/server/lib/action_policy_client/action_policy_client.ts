@@ -526,10 +526,6 @@ export class ActionPolicyClient {
     const errors: ActionPolicyBulkError[] = [];
     let affectedCount = 0;
 
-    // API key rotation is per-policy (each gets a freshly minted key and the
-    // old key invalidated), so there is no bulk SO fast path; iterate and
-    // convert expected per-policy failures (not found / conflict) into
-    // per-item errors instead of aborting the batch.
     for (const id of ids) {
       try {
         await this.updateActionPolicyApiKey({ id });
