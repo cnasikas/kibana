@@ -9,7 +9,7 @@ import type { KbnClient, ScoutLogger } from '@kbn/scout';
 import { measurePerformanceAsync } from '@kbn/scout';
 import type {
   ActionPolicyResponse,
-  BulkActionActionPoliciesResponse,
+  BulkResponse,
   CreateActionPolicyDataInput,
   FindActionPoliciesResponse,
   UpdateActionPolicyData,
@@ -28,6 +28,12 @@ export interface ActionPoliciesApiService {
   snooze: (id: string, snoozedUntil: string) => Promise<ActionPolicyResponse>;
   unsnooze: (id: string) => Promise<void>;
   delete: (id: string) => Promise<void>;
+  bulkDelete: (ids: string[]) => Promise<BulkResponse>;
+  bulkEnable: (ids: string[]) => Promise<BulkResponse>;
+  bulkDisable: (ids: string[]) => Promise<BulkResponse>;
+  bulkSnooze: (ids: string[], snoozedUntil: string) => Promise<BulkResponse>;
+  bulkUnsnooze: (ids: string[]) => Promise<BulkResponse>;
+  bulkUpdateApiKey: (ids: string[]) => Promise<BulkResponse>;
   cleanUp: () => Promise<void>;
 }
 
@@ -53,6 +59,17 @@ export const getActionPoliciesApiService = ({
         method: 'GET',
         path: ALERTING_V2_ACTION_POLICY_API_PATH,
         query,
+      });
+      return response.data;
+    });
+
+  const postBulk = (operation: string, body: Record<string, unknown>) =>
+    measurePerformanceAsync(log, `actionPolicies.${operation}`, async () => {
+      const response = await kbnClient.request<BulkResponse>({
+        method: 'POST',
+        path: `${ALERTING_V2_ACTION_POLICY_API_PATH}/_${operation}`,
+        headers: COMMON_HEADERS,
+        body,
       });
       return response.data;
     });
@@ -153,19 +170,19 @@ export const getActionPoliciesApiService = ({
         });
       }),
 
+    bulkDelete: (ids) => postBulk('bulk_delete', { ids }),
+    bulkEnable: (ids) => postBulk('bulk_enable', { ids }),
+    bulkDisable: (ids) => postBulk('bulk_disable', { ids }),
+    bulkSnooze: (ids, snoozedUntil) => postBulk('bulk_snooze', { ids, snoozedUntil }),
+    bulkUnsnooze: (ids) => postBulk('bulk_unsnooze', { ids }),
+    bulkUpdateApiKey: (ids) => postBulk('bulk_update_api_key', { ids }),
+
     cleanUp: () =>
       measurePerformanceAsync(log, 'actionPolicies.cleanUp', async () => {
         const { items } = await list({ perPage: 100 });
         if (items.length === 0) return;
 
-        await kbnClient.request<BulkActionActionPoliciesResponse>({
-          method: 'POST',
-          path: `${ALERTING_V2_ACTION_POLICY_API_PATH}/_bulk`,
-          headers: COMMON_HEADERS,
-          body: {
-            actions: items.map((item) => ({ id: item.id, action: 'delete' as const })),
-          },
-        });
+        await postBulk('bulk_delete', { ids: items.map((item) => item.id) });
       }),
   };
 };
