@@ -14,12 +14,10 @@ import {
   apiTest,
   buildCreateActionPolicyData,
   getBulkUnsnoozeActionPoliciesUrl,
+  getSnoozeDate,
   NO_ACCESS_ROLE,
   testData,
 } from '../../../fixtures';
-
-const getSnoozeDate = (offsetMs: number = 86_400_000): string =>
-  new Date(Date.now() + offsetMs).toISOString();
 
 apiTest.describe('Bulk unsnooze action policies API', { tag: '@local-stateful-classic' }, () => {
   let writerCredentials: RoleApiCredentials;
